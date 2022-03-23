@@ -4,5 +4,10 @@
     "out": true // set this to false to include "out" folder in search results
   },
   // Turn off tsc task auto detection since we have the necessary tasks as npm scripts
-  "typescript.tsc.autoDetect": "off"
+  "typescript.tsc.autoDetect": "off",
+  "files.associations": {
+    // Relative path are not supported.
+    // https://github.com/microsoft/vscode/issues/12805
+    "**/schemas/themed_color_palette.schema.json": "jsonc",
+  }
 }

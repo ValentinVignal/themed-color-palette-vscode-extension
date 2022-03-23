@@ -3,6 +3,7 @@
   "displayName": "themed-color-palette-vscode-extension",
   "description": "An extension to lint theme.yaml files.",
   "version": "0.0.1",
+  "publisher": "valentin-vignal",
   "engines": {
     "vscode": "^1.65.0"
   },
@@ -10,9 +11,20 @@
     "Other"
   ],
   "activationEvents": [
-    "*"
+    "onLanguage:yaml"
   ],
   "main": "./out/extension.js",
+  "contributes": {
+    "yamlValidation": [
+      {
+        "fileMatch": "**/*.theme.yaml",
+        "url": "./schemas/themed_color_palette.schema.json"
+      }
+    ]
+  },
+  "extensionDependencies": [
+    "redhat.vscode-yaml"
+  ],
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
