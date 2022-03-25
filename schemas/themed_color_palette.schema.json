@@ -1,43 +1,18 @@
 {
   "$defs": {
+    // The brightness type.
     "brightness": {
       "enum": [
         "dark",
         "light"
       ]
     },
-    "collectionOrItem": {
-      "properties": {
-        ".deprecated": {
-          "description": "If specified, the value will have a @Deprecated decorator with the given deprecation message.",
-          "type": "string"
-        },
-        ".description": {
-          "description": "The description of the object",
-          "type": "string"
-        },
-        ".flutter": {
-          "description": "If specified, the generated property will be private. So you can use it to create the flutter theme. But it won't be accessible in the code.",
-          "type": "string"
-        },
-        ".platforms": { // Look at "dependencies" to force to the be from the same list as the specified ones at the root.
-          "description": "The platforms the item will be accessible on. By default, the item will be accessible on all the platforms of the parent. The root item is available on all platforms by default.",
-          "items": {
-            "data": {
-              "enum": "/properties/.platforms"
-            },
-            "enum": "#/properties/.platforms"
-          },
-          "minItems": 1,
-          "type": "array",
-          "uniqueItems": true
-        }
-      }
-    },
+    // The color hex code string.
     "color": {
       "pattern": "^[a-fA-F0-9]{8}$",
       "type": "string"
     },
+    // The different font weight values.
     "fontWeight": {
       "enum": [
         "100",
@@ -62,20 +37,49 @@
         "black"
       ]
     },
-    "item": {
-      "$ref": "#/$defs/collectionOrItem",
-      "properties": {
-        ".type": {
-          "$ref": "#/$defs/itemType"
-        },
-        "description": "A shared or themed item"
-      },
-      "required": [
-        ".type"
-      ],
-      "type": "object"
+    // A camel case string.
+    "camelCase": {
+      "type": "string",
+      "pattern": "^[a-z][a-zA-Z0-9]*$"
     },
-    "itemType": {
+    // A regular expression to match the import
+    "importRegExp": {
+      "type": "string",
+      "pattern": "^(\\.shared.|)[a-z]([a-zA-Z0-9]|\\.)*$"
+    },
+    ".deprecated": {
+      "description": "If specified, the value will have a @Deprecated decorator with the given deprecation message.",
+      "type": "string"
+    },
+    ".description": {
+      "description": "The description of the object. This will be used in the generated documentation in the code.",
+      "type": "string"
+    },
+    ".flutter": {
+      "description": "If specified, the generated property will be private. So you can use it to create the flutter theme. But it won't be accessible in the code.",
+      "type": "string"
+    },
+    ".platforms": {
+      "description": "The platforms the item will be accessible on. By default, the item will be accessible on all the platforms of the parent. The root item is available on all platforms by default.",
+      "items": {
+        "$ref": "#/$defs/camelCase",
+        "type": "string",
+        "uniqueItems": true
+      },
+      "type": "array"
+    },
+    "importedValue": {
+      "description": "Imported value",
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "import": {
+          "description": "Imports a value defined above in the file.",
+          "$ref": "#/$defs/importRegExp"
+        }
+      }
+    },
+    ".type": {
       "description": "The type of the object",
       "enum": [
         "int",
@@ -87,8 +91,22 @@
       ]
     },
     "sharedCollection": {
-      "$ref": "#/$defs/collectionOrItem",
+      "description": "A collection of shared values.",
       "additionalProperties": false,
+      "properties": {
+        ".deprecated": {
+          "$ref": "#/$defs/.deprecated"
+        },
+        ".description": {
+          "$ref": "#/$defs/.description"
+        },
+        ".flutter": {
+          "$ref": "#/$defs/.flutter"
+        },
+        ".platforms": {
+          "$ref": "#/$defs/.platforms"
+        }
+      },
       "patternProperties": {
         "^[a-z][a-zA-Z0-9]*$": {
           "oneOf": [
@@ -104,12 +122,10 @@
       "type": "object"
     },
     "sharedItem": {
-      "allOf": [
-        {
-          "$ref": "#/$defs/item"
-        }
+      "required": [
+        ".type",
+        ".value"
       ],
-      "description": "A shared item",
       "oneOf": [
         {
           "properties": {
@@ -117,7 +133,14 @@
               "const": "double"
             },
             ".value": {
-              "type": "number"
+              "oneOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "$ref": "#/$defs/importedValue"
+                }
+              ]
             }
           }
         },
@@ -127,7 +150,14 @@
               "const": "int"
             },
             ".value": {
-              "type": "integer"
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/importedValue"
+                }
+              ]
             }
           }
         },
@@ -137,7 +167,14 @@
               "const": "color"
             },
             ".value": {
-              "$ref": "#/$defs/color"
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/color"
+                },
+                {
+                  "$ref": "#/$defs/importedValue"
+                }
+              ]
             }
           }
         },
@@ -147,7 +184,14 @@
               "const": "fontWeight"
             },
             ".value": {
-              "#ref": "#/$defs/fontWeight"
+              "oneOf": [
+                {
+                  "#ref": "#/$defs/fontWeight"
+                },
+                {
+                  "$ref": "#/$defs/importedValue"
+                }
+              ]
             }
           }
         },
@@ -157,7 +201,14 @@
               "const": "bool"
             },
             ".value": {
-              "type": "boolean"
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "$ref": "#/$defs/importedValue"
+                }
+              ]
             }
           }
         },
@@ -167,27 +218,65 @@
               "const": "brightness"
             },
             ".value": {
-              "$ref": "#/$defs/brightness"
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/brightness"
+                },
+                {
+                  "$ref": "#/$defs/importedValue"
+                }
+              ]
             }
           }
         }
       ],
       "properties": {
+        ".deprecated": {
+          "$ref": "#/$defs/.deprecated"
+        },
+        ".description": {
+          "$ref": "#/$defs/.description"
+        },
+        ".flutter": {
+          "$ref": "#/$defs/.flutter"
+        },
+        ".platforms": {
+          "$ref": "#/$defs/.platforms"
+        },
+        ".type": {
+          "$ref": "#/$defs/.type"
+        },
         ".value": {
-          "description": "The value of the object"
+          "description": "The value of the shared object."
         }
       },
-      "required": [
-        ".value"
-      ],
+      "description": "A shared item",
       "type": "object"
+    },
+    "themedItem": {
+      // TODO
+    },
+    "themedCollection": {
+      // TODO
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "The schema of the yaml theme",
+  "description": "The schema of the yaml theme.",
   "properties": {
+    "test0": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "test1": {
+      "type": "string",
+      "data": {
+        "enum": "#/test0"
+      }
+    },
     ".description": {
-      "type": "string"
+      "$ref": "#/$defs/.description"
     },
     ".name": {
       "description": "The name of the main class created by the code generation that will contain all the properties of themed color palette. It should be in camelCase.",
@@ -206,18 +295,12 @@
       "uniqueItems": true
     },
     ".shared": {
-      "additionalProperties": false,
-      "allOf": [
-        {
-          "$ref": "#/$defs/sharedCollection"
-        }
-      ],
-      "description": "The shared values are constants independent of the theme. To import those values, you need to prefix the import with `.shared`",
-      "patternProperties": {
-        "^[a-z][a-zA-Z0-9]*$": {
-          "type": "object"
-        }
-      }
+      "description": "Themed values are values that change between the different themes.\n\nTo import those values, you need to prefix the import with `.shared`",
+      "$ref": "#/$defs/sharedCollection"
+    },
+    ".themed": {
+      "description": "The themed values are dependant of the theme. The default theme must **ALWAYS** be specified. If a non-default theme is not specify, the value/import logic of the default theme will be reused.\n\nTo import those values, you **don't** need to prefix the import with `.themed`. Directly use the name of the property.",
+      "$ref": "#/$defs/themedCollection"
     },
     ".themes": {
       "description": "The list of themes that are supported. The first one is the default theme and needs to be specified in each and every themed objects. If a theme is not specified for an object, it will use the value/logic of the default theme.",
@@ -231,18 +314,6 @@
     ".version": {
       "default": "1.0.0",
       "description": "The version of the theme",
-      "type": "string"
-    },
-    "test0": {
-      "items": {
-        "type": "string"
-      },
-      "type": "array"
-    },
-    "test1": {
-      "data": {
-        "enum": "#/test0"
-      },
       "type": "string"
     }
   },
