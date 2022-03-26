@@ -79,6 +79,28 @@
         }
       }
     },
+    "importedColor": {
+      "description": "Imported color",
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "import": {
+          "description": "Imports a color defined above in the file.",
+          "$ref": "#/$defs/importRegExp"
+        },
+        "withOpacity": {
+          "description": "If specified, the imported color's opacity will be overriden",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/importedValue"
+            }
+          ]
+        }
+      }
+    },
     ".type": {
       "description": "The type of the object",
       "enum": [
@@ -172,7 +194,7 @@
                   "$ref": "#/$defs/color"
                 },
                 {
-                  "$ref": "#/$defs/importedValue"
+                  "$ref": "#/$defs/importedColor"
                 }
               ]
             }
@@ -254,10 +276,179 @@
       "type": "object"
     },
     "themedItem": {
-      // TODO
+      "description": "A collection of themed values.",
+      "additionalProperties": false,
+      "type": "object",
+      "oneOf": [
+        {
+          "properties": {
+            ".type": {
+              "const": "double"
+            }
+          },
+          "patternProperties": {
+            "^[a-z][a-zA-Z0-9]*$": {
+              "oneOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "$ref": "#/$defs/importedValue"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            ".type": {
+              "const": "int"
+            }
+          },
+          "patternProperties": {
+            "^[a-z][a-zA-Z0-9]*$": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/importedValue"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            ".type": {
+              "const": "color"
+            }
+          },
+          "patternProperties": {
+            "^[a-z][a-zA-Z0-9]*$": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/color"
+                },
+                {
+                  "$ref": "#/$defs/importedColor"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            ".type": {
+              "const": "fontWeight"
+            }
+          },
+          "patternProperties": {
+            "^[a-z][a-zA-Z0-9]*$": {
+              "oneOf": [
+                {
+                  "#ref": "#/$defs/fontWeight"
+                },
+                {
+                  "$ref": "#/$defs/importedValue"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            ".type": {
+              "const": "bool"
+            }
+          },
+          "patternProperties": {
+            "^[a-z][a-zA-Z0-9]*$": {
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "$ref": "#/$defs/importedValue"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            ".type": {
+              "const": "brightness"
+            },
+            ".value": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/brightness"
+                },
+                {
+                  "$ref": "#/$defs/importedValue"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "properties": {
+        ".deprecated": {
+          "$ref": "#/$defs/.deprecated"
+        },
+        ".description": {
+          "$ref": "#/$defs/.description"
+        },
+        ".flutter": {
+          "$ref": "#/$defs/.flutter"
+        },
+        ".platforms": {
+          "$ref": "#/$defs/.platforms"
+        },
+        ".type": {
+          "$ref": "#/$defs/.type"
+        }
+      },
+      "patternProperties": {
+        "^[a-z][a-zA-Z0-9]*$": {
+          "description": "The value of the item for the given theme.\n\nThe default theme must **ALWAYS** be specified.\nIf a theme is omitted, the default theme's value/logic will be used."
+        }
+      },
+      "required": [
+        ".type"
+      ]
     },
     "themedCollection": {
-      // TODO
+      "description": "A collection of themed values.",
+      "additionalProperties": false,
+      "properties": {
+        ".deprecated": {
+          "$ref": "#/$defs/.deprecated"
+        },
+        ".description": {
+          "$ref": "#/$defs/.description"
+        },
+        ".flutter": {
+          "$ref": "#/$defs/.flutter"
+        },
+        ".platforms": {
+          "$ref": "#/$defs/.platforms"
+        }
+      },
+      "patternProperties": {
+        "^[a-z][a-zA-Z0-9]*$": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/themedItem"
+            },
+            {
+              "$ref": "#/$defs/themedCollection"
+            }
+          ]
+        }
+      },
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
