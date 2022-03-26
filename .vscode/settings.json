@@ -9,5 +9,10 @@
     // Relative path are not supported.
     // https://github.com/microsoft/vscode/issues/12805
     "**/schemas/themed_color_palette.schema.json": "jsonc",
+  },
+  "files.insertFinalNewline": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": true,
+    "source.fixAll": true
   }
 }
