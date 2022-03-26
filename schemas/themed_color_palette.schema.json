@@ -48,7 +48,7 @@
       "pattern": "^(\\.shared.|)[a-z]([a-zA-Z0-9]|\\.)*$"
     },
     ".deprecated": {
-      "description": "If specified, the value will have a @Deprecated decorator with the given deprecation message.",
+      "description": "If specified, the value will have a `@Deprecated` decorator with the given deprecation message.",
       "type": "string"
     },
     ".description": {
@@ -69,32 +69,31 @@
       "type": "array"
     },
     "importedValue": {
-      "description": "Imported value",
       "additionalProperties": false,
       "type": "object",
       "properties": {
         "import": {
-          "description": "Imports a value defined above in the file.",
+          "description": "Imports a value.\n\nYou can only import values that have been defined before/above in the file.\nTo import a shared value, use the following syntax: `import: .shared.collectionName.valueName`.\nTo import a themed value, use the following syntax: `import: collectionName.valueName`",
           "$ref": "#/$defs/importRegExp"
         }
       }
     },
     "importedColor": {
-      "description": "Imported color",
       "additionalProperties": false,
       "type": "object",
       "properties": {
         "import": {
-          "description": "Imports a color defined above in the file.",
+          "description": "Imports a color.\n\nYou can only import colors that have been defined before/above in the file.\nTo import a shared value, use the following syntax: `import: .shared.collectionName.valueName`.\nTo import a themed value, use the following syntax: `import: collectionName.valueName`",
           "$ref": "#/$defs/importRegExp"
         },
         "withOpacity": {
-          "description": "If specified, the imported color's opacity will be overriden",
+          "description": "If specified, the imported color's opacity will be overridden. You can either specify the opacity directly (between 0 and 1) or import an value created above in the file.",
           "oneOf": [
             {
               "type": "number"
             },
             {
+              "description": "If specified, the imported color's opacity will be overridden. You can either specify the opacity directly (between 0 and 1) or import an value created above in the file.",
               "$ref": "#/$defs/importedValue"
             }
           ]
@@ -102,7 +101,7 @@
       }
     },
     ".type": {
-      "description": "The type of the object",
+      "description": "The type of the object.",
       "enum": [
         "int",
         "double",
@@ -272,11 +271,11 @@
           "description": "The value of the shared object."
         }
       },
-      "description": "A shared item",
+      "description": "A shared item.\n\nImport this item by using the `import` keyword with the path to this item prefixed with `.shared.`.",
       "type": "object"
     },
     "themedItem": {
-      "description": "A collection of themed values.",
+      "description": "An item that is depend of the theme. \n\nThe default theme must **ALWAYS** be specified.\nIf a theme is omitted, the default theme's value/logic will be used.\n\nImport this item by using the `import` keyword with the path to this item.",
       "additionalProperties": false,
       "type": "object",
       "oneOf": [
@@ -420,7 +419,7 @@
       ]
     },
     "themedCollection": {
-      "description": "A collection of themed values.",
+      "description": "A collection of themed values.\nYou can import the themed values by using the `import` keyword and the path to the imported value.",
       "additionalProperties": false,
       "properties": {
         ".deprecated": {
@@ -454,29 +453,17 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "The schema of the yaml theme.",
   "properties": {
-    "test0": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
-    "test1": {
-      "type": "string",
-      "data": {
-        "enum": "#/test0"
-      }
-    },
     ".description": {
       "$ref": "#/$defs/.description"
     },
     ".name": {
-      "description": "The name of the main class created by the code generation that will contain all the properties of themed color palette. It should be in camelCase.",
+      "description": "The name of the main class created by the code generation that will contain all the properties of themed color palette.",
       "pattern": "^[a-z][a-zA-Z0-9]*$",
       "type": "string"
     },
     ".platforms": {
       "items": {
-        "description": "The different platforms that the theme is available on. It should be in camelCase.",
+        "description": "The different platforms that the theme is available on.",
         "pattern": "^[a-z][a-zA-Z0-9]*$",
         "type": "string",
         "uniqueItems": true
@@ -510,6 +497,7 @@
   },
   "required": [
     ".themes",
+    ".themed",
     ".name"
   ],
   "title": "Yaml theme schema",
