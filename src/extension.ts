@@ -7,6 +7,8 @@ let activeEditor: vscode.TextEditor | undefined;
 
 let timeout: NodeJS.Timeout | null = null;
 
+const diagnosticCollection = vscode.languages.createDiagnosticCollection('themed-yaml');
+
 
 export function activate(context: vscode.ExtensionContext) {
 
@@ -40,9 +42,13 @@ function trigger(context: vscode.ExtensionContext) {
   if (timeout !== null) {
     clearTimeout(timeout);
   }
-  timeout = setTimeout(() => {
-    displayColorDecoration(context);
-  }, 0);
+  timeout = setTimeout(
+    () => {
+      // displayColorDecoration(context);
+      analyzeFile(context);
+    },
+    0,
+  );
 }
 
 const colorRegExp = /\b[a-f0-9]{8}\b/g;
@@ -54,7 +60,6 @@ function displayColorDecoration(context: vscode.ExtensionContext): void {
   const text = activeEditor.document.getText();
 
   const matches = text.matchAll(colorRegExp);
-  console.log('matches', matches);
   for (const match of matches) {
     const matchText = match[0];
     const startPosition = activeEditor.document.positionAt(match.index!);
@@ -70,13 +75,16 @@ function displayColorDecoration(context: vscode.ExtensionContext): void {
     const decorationType = vscode.window.createTextEditorDecorationType({
       backgroundColor: rgba,
       color: isLight ? '#000000ff' : '#ffffffff',
-      before: {
-        contentText: ' ',
-        margin: '0.1em 0.2em 0 0.2em',
-        width: '0.7em',
-        height: '0.7em',
-        backgroundColor: rgba,
-      },
+      // TODO: See how color high-light handles the boxes and reloads https://github.dev/enyancc/vscode-ext-color-highlight/blob/6f84b8811a4b166a0a7bf66d5637a5bb0858d1ed/src/color-highlight.js#L93.
+      // I can put the boxes before the colors
+      // And also several of them after the name of an themed value.
+      // before: {
+      //   contentText: ' ',
+      //   margin: '0.1em 0.2em 0 0.2em',
+      //   width: '0.7em',
+      //   height: '0.7em',
+      //   backgroundColor: rgba,
+      // },
       overviewRulerColor: rgba,
     });
 
@@ -84,9 +92,135 @@ function displayColorDecoration(context: vscode.ExtensionContext): void {
     activeEditor.setDecorations(decorationType, [decoration]);
   }
 
-  const yaml = load(text) as {};
 
 
+}
+
+
+interface IThemedRecursionParameters {
+  subYaml: {
+    [key: string]: any;
+  };
+  /**
+   * The current path in the yaml: `['collectionName', 'itemName']`.
+   */
+  currentPath: string[];
+}
+
+function analyzeFile(context: vscode.ExtensionContext): void {
+  if (!activeEditor || !activeEditor.document) {
+    return;
+  }
+  const text = activeEditor.document.getText();
+  const tabSize = activeEditor.options.tabSize;
+
+
+  /**
+   * All the items' values.
+   *
+   * The key is the path (`'collectionName.itemName'`) or
+   * (`'.shared.collectionName.itemName'`).
+   *
+   * The value is the value of the item.
+   */
+  const values = new Map<String, any>();
+  /**
+   * The current index in the file.
+   */
+  let currentIndex = 0;
+
+  /**
+   * The yaml object.
+   */
+  const yaml = load(text) as {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '.themed': {
+      [key: string]: any;
+    },
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '.shared': {},
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '.themes': string[]
+
+  };
+  const themes = yaml['.themes'];
+  const defaultTheme = themes[0];
+  console.log('yaml', yaml);
+  currentIndex = /^\.themed\:/gm.exec(text)!.index;  // Themed index.
+
+
+  function themedRecursion({ subYaml, currentPath }: IThemedRecursionParameters): void {
+    const isCollection = !subYaml.hasOwnProperty('.type');
+    if (isCollection) {
+      for (const key in subYaml) {
+        const keyRegExp = new RegExp(`^(\t| )*${key}:`, 'gm');
+        const match = keyRegExp.exec(text.substring(currentIndex));
+        const indexOffset = match!.index;
+        currentIndex += indexOffset;
+        const path = currentPath.concat(key);
+        themedRecursion({ subYaml: subYaml[key], currentPath: path });
+      }
+
+    } else {
+      if (!subYaml.hasOwnProperty(defaultTheme)) {
+        const line = text.substring(0, currentIndex).match(/\r\n|\r|\n/g)!.length;
+        const keyMatch = text.substring(currentIndex).match(/\w+/)!;
+
+        const diagnostic = new vscode.Diagnostic(
+          new vscode.Range(
+            new vscode.Position(line, keyMatch.index!),
+            new vscode.Position(line, keyMatch.index! + keyMatch[0].length),
+          ),
+          `The default theme "${defaultTheme}" must be defined.`,
+          vscode.DiagnosticSeverity.Error,
+        );
+        diagnosticCollection.set(
+          activeEditor!.document.uri,
+          [...diagnosticCollection.get(activeEditor!.document.uri) ?? [], diagnostic],
+        );
+
+      }
+
+      const isColor = subYaml['.type'] === 'color';
+      for (const theme in themes) {
+        const path = currentPath.concat(theme);
+
+        let themeValue = subYaml[theme] ?? subYaml[defaultTheme];
+        if (typeof themeValue === 'object') {
+          // The value is imported
+          let importPath = (themeValue as { import: string }).import;
+          if (!importPath.startsWith('.shared')) {
+            importPath += `.${theme}`;
+          }
+          themeValue = values.get(importPath);
+        }
+        values.set(path.join('.'), themeValue); // Saves the value for future imports
+      }
+
+
+    }
+  }
+
+  themedRecursion({ subYaml: yaml['.themed'], currentPath: [] });
+}
+
+
+
+function verifyImportsRecursive(yaml: {}): void {
+  // TODO: Try to implement everything in 1 iteration over the document.
+
+  /**
+   *  For each key in order:
+   * - Check if there is an import.
+   *    - If yes, check it is valid. -> If not, add an error decoration.
+   * - Get the value for all the themes (if applicable)
+   * - Check the platforms.
+   * - Check the default theme is specified (if applicable).
+   * - Get the line index of the current key.
+   * - Store the visited path with:
+   *    - The value(s)
+   *    - The decoration (?) (I don't think it is necessary)
+   */
 }
 
 
