@@ -1,7 +1,7 @@
 import { load } from 'js-yaml';
 import * as vscode from 'vscode';
 import { DocumentInstance } from './DocumentInstance';
-import { colorRegExp, diagnosticCollection } from './globals';
+import { Globals } from './globals';
 
 const pattern = new RegExp(/\b[a-z0-9]{8}\b/);
 
@@ -17,6 +17,9 @@ let activeDocumentInstances: DocumentInstance[] = [];
 
 
 export function activate(context: vscode.ExtensionContext) {
+
+  Globals.diagnosticCollection; // Initialize the diagnostic collection.
+  console.log('activate');
 
   vscode.window.onDidChangeVisibleTextEditors(onOpenEditor, null, context.subscriptions);
 
@@ -45,6 +48,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
+  Globals.diagnosticCollection.dispose();
 }
 
 /**
@@ -117,7 +121,7 @@ function displayColorDecoration(context: vscode.ExtensionContext): void {
   }
   const text = activeEditor.document.getText();
 
-  const matches = text.matchAll(colorRegExp);
+  const matches = text.matchAll(Globals.colorRegExp);
   for (const match of matches) {
     const matchText = match[0];
     const startPosition = activeEditor.document.positionAt(match.index!);
@@ -232,9 +236,9 @@ function analyzeFile(context: vscode.ExtensionContext): void {
           `The default theme "${defaultTheme}" must be defined.`,
           vscode.DiagnosticSeverity.Error,
         );
-        diagnosticCollection.set(
+        Globals.diagnosticCollection.set(
           activeEditor!.document.uri,
-          [...diagnosticCollection.get(activeEditor!.document.uri) ?? [], diagnostic],
+          [...Globals.diagnosticCollection.get(activeEditor!.document.uri) ?? [], diagnostic],
         );
 
       }

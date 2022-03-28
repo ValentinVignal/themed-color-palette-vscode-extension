@@ -1,7 +1,7 @@
 import { load } from 'js-yaml';
 import * as vscode from 'vscode';
 import { AnalyzeThemedContext, IThemedYaml } from './AnalyzeContext';
-import { diagnosticCollection } from './globals';
+import { Globals } from './globals';
 
 
 interface IGlobalYaml {
@@ -64,7 +64,7 @@ export class DocumentInstance {
 
     // Cleat the state.
     this.diagnostics = [];
-    diagnosticCollection.set(this.document.uri, this.diagnostics);
+    Globals.diagnosticCollection.set(this.document.uri, this.diagnostics);
 
     this.text = this.document.getText();
     this.yaml = load(this.text) as IGlobalYaml;
@@ -80,7 +80,7 @@ export class DocumentInstance {
     }));
 
     // Send the diagnostics to VSCode.
-    diagnosticCollection.set(this.document.uri, this.diagnostics);
+    Globals.diagnosticCollection.set(this.document.uri, this.diagnostics);
   }
 
   /**
@@ -88,7 +88,7 @@ export class DocumentInstance {
    */
   dispose(): void {
     this.disposed = true;
-    diagnosticCollection.set(this.document.uri, []);
+    Globals.diagnosticCollection.set(this.document.uri, []);
   }
 
   /**
