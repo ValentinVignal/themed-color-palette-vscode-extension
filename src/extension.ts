@@ -1,5 +1,7 @@
 import { load } from 'js-yaml';
 import * as vscode from 'vscode';
+import { DocumentInstance } from './DocumentInstance';
+import { colorRegExp, diagnosticCollection } from './globals';
 
 const pattern = new RegExp(/\b[a-z0-9]{8}\b/);
 
@@ -7,36 +9,93 @@ let activeEditor: vscode.TextEditor | undefined;
 
 let timeout: NodeJS.Timeout | null = null;
 
-const diagnosticCollection = vscode.languages.createDiagnosticCollection('themed-yaml');
+
+/**
+ * List of the active documents.
+ */
+let activeDocumentInstances: DocumentInstance[] = [];
 
 
 export function activate(context: vscode.ExtensionContext) {
 
-  activeEditor = vscode.window.activeTextEditor;
+  vscode.window.onDidChangeVisibleTextEditors(onOpenEditor, null, context.subscriptions);
 
-  vscode.window.onDidChangeActiveTextEditor(function (editor) {
-    activeEditor = editor;
-    if (editor) {
-      trigger(context);
-    }
-  }, null, context.subscriptions);
+  onOpenEditor(vscode.window.visibleTextEditors);
+
+  // activeEditor = vscode.window.activeTextEditor;
 
 
-  vscode.workspace.onDidChangeTextDocument(function (event) {
-    if (activeEditor && event.document === activeEditor.document) {
-      trigger(context);
-    }
-  }, null, context.subscriptions);
 
-  trigger(context);
+  // vscode.window.onDidChangeActiveTextEditor(function (editor) {
+  //   activeEditor = editor;
+  //   if (editor) {
+  //     trigger(context);
+  //   }
+  // }, null, context.subscriptions);
+
+
+  // vscode.workspace.onDidChangeTextDocument(function (event) {
+  //   if (activeEditor && event.document === activeEditor.document) {
+  //     trigger(context);
+  //   }
+  // }, null, context.subscriptions);
+
+  // trigger(context);
 
 }
 
 export function deactivate() {
-  if (timeout !== null) {
-    clearTimeout(timeout);
+}
+
+/**
+ * Callback called when a new editor is opened.
+ */
+function onOpenEditor(editors: readonly vscode.TextEditor[]): void {
+  const documents = editors.map(({ document }) => document);
+  const documentInstancesToDispose = activeDocumentInstances.filter(({ document }) => !documents.includes(document));
+
+  activeDocumentInstances = activeDocumentInstances.filter(({ document }) => documents.includes(document));
+  for (const documentInstanceToDispose of documentInstancesToDispose) {
+    documentInstanceToDispose.dispose();
+  }
+
+  const validDocuments = documents.filter(isValidDocument);
+  doLints(validDocuments);
+
+
+}
+
+/**
+ * Returns `true` for the documents that can be linted.
+ */
+function isValidDocument(document: vscode.TextDocument): boolean {
+  return document.languageId === 'yaml' && document.fileName.endsWith('theme.yaml');
+}
+
+/**
+ * Creates and updates the lints on the given documents.
+ */
+async function doLints(documents: vscode.TextDocument[]): Promise<void> {
+  if (documents.length) {
+    const instances = await Promise.all(documents.map(findOrCreateInstance));
+    instances.map(instance => instance.update());
   }
 }
+
+function findOrCreateInstance(document: vscode.TextDocument): DocumentInstance {
+  let instance = activeDocumentInstances.find(({ document }) => document === document);
+  if (instance) {
+    return instance;
+  }
+  instance = new DocumentInstance(document);
+  activeDocumentInstances.push(instance);
+  return instance;
+}
+
+
+
+
+
 
 function trigger(context: vscode.ExtensionContext) {
   if (timeout !== null) {
@@ -51,7 +110,6 @@ function trigger(context: vscode.ExtensionContext) {
   );
 }
 
-const colorRegExp = /\b[a-f0-9]{8}\b/g;
 
 function displayColorDecoration(context: vscode.ExtensionContext): void {
   if (!activeEditor || !activeEditor.document) {
