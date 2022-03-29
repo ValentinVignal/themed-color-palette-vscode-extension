@@ -1,6 +1,6 @@
 {
   "name": "themed-color-palette-vscode-extension",
-  "displayName": "themed-color-palette-vscode-extension",
+  "displayName": "Themed color palette",
   "description": "An extension to lint theme.yaml files.",
   "version": "0.0.1",
   "publisher": "valentin-vignal",
@@ -10,6 +10,10 @@
   "categories": [
     "Other"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ValentinVignal/themed-color-palette-vscode-extension"
+  },
   "activationEvents": [
     "onLanguage:yaml"
   ],
