@@ -10,6 +10,8 @@ interface IGlobalYaml {
   '.themed': IThemedYaml;
   // eslint-disable-next-line @typescript-eslint/naming-convention
   '.themes': string[];
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  '.platforms': string[] | undefined;
 }
 
 
@@ -26,18 +28,21 @@ export class DocumentInstance {
     // eslint-disable-next-line @typescript-eslint/naming-convention
     '.themed': {},
     // eslint-disable-next-line @typescript-eslint/naming-convention
-    '.themes': []
+    '.themes': [],
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '.platforms': [],
   };
 
   /**
    * All the diagnostics of the document.
    */
   private diagnostics: vscode.Diagnostic[] = [];
+  private listener: vscode.Disposable | null = null;
 
   constructor(
     public readonly document: vscode.TextDocument,
   ) {
-    const listener = vscode.workspace.onDidChangeTextDocument(({ document }) => this.update(document));
+    this.listener = vscode.workspace.onDidChangeTextDocument(({ document }) => this.update(document));
   };
 
   /**
@@ -78,6 +83,7 @@ export class DocumentInstance {
       yaml: this.yaml['.themed'],
       currentKey: '.themed',
       path: [],
+      platforms: this.yaml['.platforms'] ?? [],
     }));
 
     // Send the diagnostics to VSCode.
@@ -89,6 +95,8 @@ export class DocumentInstance {
    */
   dispose(): void {
     this.disposed = true;
+    this.listener?.dispose();
+    this.listener = null;
     Globals.diagnosticCollection.set(this.document.uri, []);
   }
 
@@ -104,41 +112,127 @@ export class DocumentInstance {
    * Analyzes the themed part of the document.
    */
   private analyzeThemed(context: AnalyzeThemedContext): AnalyzeThemedContext['index'] {
+
+    this.verifyPlatforms(context);
+
     if (context.isCollection) {
       let index = context.index;
       for (const key in context.yaml) {
         if (key.startsWith('.')) {
           continue;
         }
+
         const keyRegExp = new KeyRegExp(key);
-        const match = keyRegExp.exec(this.text.substring(index));
-        const indexOffset = match!.index;
+        const match = keyRegExp.exec(this.text.substring(index))!;
+        const indexOffset = match.index;
+
         // Updates the index to be sure to skip the all collection.
         index = this.analyzeThemed(new AnalyzeThemedContext({
           index: index + indexOffset,
           yaml: context.yaml[key],
           path: [...context.path, key],
+          platforms: context.yaml['.platforms'] ?? context.platforms, // TODO: Pass correct platforms and check them
         }));
       }
       return index;
     } else {
       const text = this.text.substring(context.index);
-      if (!context.yaml.hasOwnProperty(this.defaultTheme)) {
-        // The default theme is not specified.
-        const diagnostic = new vscode.Diagnostic(
-          new vscode.Range(
-            ...this.keyPositionsFromIndex(context.index),
-          ),
-          `The default theme "${this.defaultTheme}" must be defined.`,
-          vscode.DiagnosticSeverity.Error,
-        );
-        this.diagnostics.push(diagnostic);
-      }
+      this.verifyDefaultTheme(context);
+      this.verifyThemeExistence(context);
 
-      // Once we are done with the object, we move to the context to the last key.
+      // Once we are done with the object, we move to the context to the last
+      // key.
       const lastKeyRegExp = new KeyRegExp(context.lastKey);
       const match = lastKeyRegExp.exec(text)!;
       return match.index;
+    }
+  }
+
+  /**
+   * Verifies the default theme is always specified in a themed item.
+   */
+  private verifyDefaultTheme(context: AnalyzeThemedContext): void {
+    if (!context.yaml.hasOwnProperty(this.defaultTheme)) {
+      // The default theme is not specified.
+      const diagnostic = new vscode.Diagnostic(
+        new vscode.Range(
+          ...this.keyPositionsFromIndex(context.index),
+        ),
+        `The default theme "${this.defaultTheme}" must be defined.`,
+        vscode.DiagnosticSeverity.Error,
+      );
+      this.diagnostics.push(diagnostic);
+    }
+  }
+
+  /**
+   * Verifies that all specified themes of the themed item exist.
+   */
+  private verifyThemeExistence(context: AnalyzeThemedContext): void {
+    for (const key in context.yaml) {
+      if (!key.startsWith('.')) {
+        // It should be a themed key
+        if (!this.yaml['.themes'].includes(key)) {
+          // The theme does not exist.
+          const keyRegExp = new KeyRegExp(key);
+          const match = keyRegExp.exec(this.text.substring(context.index))!;
+          const indexOffset = match.index;
+
+          const diagnostic = new vscode.Diagnostic(
+            new vscode.Range(
+              ...this.keyPositionsFromIndex(context.index + indexOffset),
+            ),
+            `Unknown theme: "${key}".\nAll the themes must be defined in the \`.themes\` array.`,
+            vscode.DiagnosticSeverity.Error,
+          );
+          this.diagnostics.push(diagnostic);
+        }
+      }
+    }
+  }
+
+  /**
+   * Check the specified platforms:
+   * - Are valid and defined.
+   * - Are included in the parent context.
+   */
+  private verifyPlatforms(context: AnalyzeThemedContext): void {
+    const platforms = context.yaml['.platforms'];
+    if (platforms) {
+      const definedPlatforms = this.yaml['.platforms'];
+      const platformsRegExp = new KeyRegExp('.platforms');
+      const platformsMatch = platformsRegExp.exec(this.text.substring(context.index))!;
+      const platformsIndexOffset = platformsMatch.index;
+      let currentIndex = context.index + platformsIndexOffset;
+      for (const platform of platforms) {
+        if (!definedPlatforms?.includes(platform)) {
+          // The platform is valid and defined.
+          currentIndex += this.text.substring(currentIndex).indexOf(platform);
+          const position = this.positionFromIndex(currentIndex);
+          const diagnostic = new vscode.Diagnostic(
+            new vscode.Range(
+              position,
+              new vscode.Position(position.line, position.character + platform.length),
+            ),
+            `Unknown platform: "${platform}".\nAll the platforms must be defined in the \`.platforms\` array.`,
+            vscode.DiagnosticSeverity.Error,
+          );
+          this.diagnostics.push(diagnostic);
+        } else if (!context.platforms.includes(platform)) {
+          // The platform has been filtered out by a parent and can't be used.
+          currentIndex += this.text.substring(currentIndex).indexOf(platform);
+          const position = this.positionFromIndex(currentIndex);
+          const diagnostic = new vscode.Diagnostic(
+            new vscode.Range(
+              position,
+              new vscode.Position(position.line, position.character + platform.length),
+            ),
+            `The platform "${platform}" is not accessible in \`${context.path.join('.')}\`.\nA parent collection must have filtered it out. Verify ${platform} was included in all the parent collections \`.platforms\` list.`,
+            vscode.DiagnosticSeverity.Error,
+          );
+          this.diagnostics.push(diagnostic);
+        }
+      }
     }
 
   }
@@ -156,4 +250,14 @@ export class DocumentInstance {
       new vscode.Position(line, keyMatch.index! + keyMatch[0].length),
     ];
   }
+
+  private positionFromIndex(index: number): vscode.Position {
+    const text = this.text.substring(0, index);
+    const match = text.match(/\r\n|\r|\n/g)!;
+    const line = match.length;
+    const column = index - text.lastIndexOf('\n') - 1;
+
+    return new vscode.Position(line, column);
+  }
+
 }

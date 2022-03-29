@@ -6,12 +6,15 @@ interface IAnalyzeThemedContext {
   yaml: IThemedYaml;
   currentKey?: string | undefined;
   path: string[];
-
+  platforms: string[];
 
 }
 
 export type IThemedYaml = {
   [key: string]: IThemedYaml;
+} & {
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  '.platforms'?: string[] | undefined;
 };
 
 
@@ -25,7 +28,9 @@ export class AnalyzeThemedContext implements IAnalyzeThemedContext {
     this.yaml = context.yaml;
     this.currentKey = context.currentKey;
     this.path = context.path;
+    this.platforms = context.platforms;
   }
+  readonly platforms: string[];
   readonly path: string[];
   readonly currentKey?: string | undefined;
   readonly index: number;
@@ -60,7 +65,4 @@ export class AnalyzeThemedContext implements IAnalyzeThemedContext {
   get lastKey() {
     return this.keys[this.keys.length - 1];
   }
-
-
-
 }
