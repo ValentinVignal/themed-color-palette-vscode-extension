@@ -2,6 +2,7 @@ import { load } from 'js-yaml';
 import * as vscode from 'vscode';
 import { AnalyzeThemedContext, IThemedYaml } from './AnalyzeContext';
 import { Globals } from './globals';
+import { KeyRegExp } from './utils/KeyRegExp';
 
 
 interface IGlobalYaml {
@@ -68,7 +69,7 @@ export class DocumentInstance {
 
     this.text = this.document.getText();
     this.yaml = load(this.text) as IGlobalYaml;
-    // TODO: Call analayze shared
+    // TODO: Call analyze shared
     this.analyzeShared();
 
     const themedIndex = /^\.themed\:/gm.exec(this.text)!.index;  // Themed index.
@@ -102,27 +103,28 @@ export class DocumentInstance {
   /**
    * Analyzes the themed part of the document.
    */
-  private analyzeThemed(context: AnalyzeThemedContext): void {
-    const text = this.text.substring(context.index);
+  private analyzeThemed(context: AnalyzeThemedContext): AnalyzeThemedContext['index'] {
     if (context.isCollection) {
+      let index = context.index;
       for (const key in context.yaml) {
         if (key.startsWith('.')) {
           continue;
         }
-        const keyRegExp = new RegExp(`^(\t| )*${key}:`, 'gm');
-        const match = keyRegExp.exec(text);
+        const keyRegExp = new KeyRegExp(key);
+        const match = keyRegExp.exec(this.text.substring(index));
         const indexOffset = match!.index;
-        this.analyzeThemed(new AnalyzeThemedContext({
-          index: context.index + indexOffset,
+        // Updates the index to be sure to skip the all collection.
+        index = this.analyzeThemed(new AnalyzeThemedContext({
+          index: index + indexOffset,
           yaml: context.yaml[key],
           path: [...context.path, key],
         }));
       }
+      return index;
     } else {
+      const text = this.text.substring(context.index);
       if (!context.yaml.hasOwnProperty(this.defaultTheme)) {
-        console.log('here', context.key);
         // The default theme is not specified.
-        const position = this.keyPositionsFromIndex(context.index);
         const diagnostic = new vscode.Diagnostic(
           new vscode.Range(
             ...this.keyPositionsFromIndex(context.index),
@@ -132,6 +134,11 @@ export class DocumentInstance {
         );
         this.diagnostics.push(diagnostic);
       }
+
+      // Once we are done with the object, we move to the context to the last key.
+      const lastKeyRegExp = new KeyRegExp(context.lastKey);
+      const match = lastKeyRegExp.exec(text)!;
+      return match.index;
     }
 
   }

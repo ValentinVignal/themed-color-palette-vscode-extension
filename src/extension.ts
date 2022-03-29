@@ -20,6 +20,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   Globals.diagnosticCollection; // Initialize the diagnostic collection.
   console.log('activate');
+  // #FFFFFF
 
   vscode.window.onDidChangeVisibleTextEditors(onOpenEditor, null, context.subscriptions);
 
@@ -86,8 +87,12 @@ async function doLints(documents: vscode.TextDocument[]): Promise<void> {
   }
 }
 
+/**
+ * Returns the existing {@link DocumentInstance} for the given document, or
+ * creates a new one.
+ */
 function findOrCreateInstance(document: vscode.TextDocument): DocumentInstance {
-  let instance = activeDocumentInstances.find(({ document }) => document === document);
+  let instance = activeDocumentInstances.find(({ document: instanceDocument }) => instanceDocument === document);
   if (instance) {
     return instance;
   }

@@ -31,6 +31,8 @@ export class AnalyzeThemedContext implements IAnalyzeThemedContext {
   readonly index: number;
   readonly yaml: IThemedYaml;
 
+  private _keys: string[] | undefined;
+
   /**
    * Returns `true` if the yaml is a collection.
    */
@@ -44,5 +46,21 @@ export class AnalyzeThemedContext implements IAnalyzeThemedContext {
   get key(): string {
     return this.path.length ? this.path[this.path.length - 1] : this.currentKey!;
   }
+
+  /**
+   * Returns the keys of the yaml.
+   */
+  get keys(): string[] {
+    return this._keys ??= Object.keys(this.yaml);
+  }
+
+  /**
+   * Returns the last key of the yaml file.
+   */
+  get lastKey() {
+    return this.keys[this.keys.length - 1];
+  }
+
+
 
 }
