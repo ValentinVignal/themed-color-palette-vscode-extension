@@ -19,11 +19,5 @@ At this moment, there are no settings for this extension.
 
 Users appreciate release notes as you update your extension.
 
-### 0.0.1
-
-Initial release of the extension.
-- Provides the JSON Schema.
-- Lints, themed object that don't specify the default theme.
-
 
 **Enjoy!**
