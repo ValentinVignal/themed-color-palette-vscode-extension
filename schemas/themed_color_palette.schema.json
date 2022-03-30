@@ -82,6 +82,10 @@
       "additionalProperties": false,
       "type": "object",
       "properties": {
+        "value": {
+          "description": "The color value.\nThe value should have the format `aarrggbb`.\n\nIf you want to import a color, use the `import` property.",
+          "$ref": "#/$defs/color"
+        },
         "import": {
           "description": "Imports a color.\n\nYou can only import colors that have been defined before/above in the file.\nTo import a shared value, use the following syntax: `import: .shared.collectionName.valueName`.\nTo import a themed value, use the following syntax: `import: collectionName.valueName`",
           "$ref": "#/$defs/importRegExp"
