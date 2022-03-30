@@ -1,6 +1,29 @@
 
 
 
+
+export interface IThemedYaml {
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  '.platforms'?: string[] | undefined;
+}
+
+export type ItemType = 'int' | 'double' | 'color' | 'fontWeight' | 'bool' | 'brightness';
+
+
+export type IThemedItemYaml = {
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  '.type': ItemType
+  [key: string]: any;
+} & IThemedYaml;
+
+
+export type IThemedCollectionYaml = {
+  [key: string]: IThemedYaml | IThemedItemYaml | undefined;
+} & IThemedYaml;
+
+
+export type Color = string;
+
 interface IAnalyzeThemedContext {
   index: number;
   yaml: IThemedYaml;
@@ -9,14 +32,6 @@ interface IAnalyzeThemedContext {
   platforms: string[];
 
 }
-
-export type IThemedYaml = {
-  [key: string]: IThemedYaml;
-} & {
-  // eslint-disable-next-line @typescript-eslint/naming-convention
-  '.platforms'?: string[] | undefined;
-};
-
 
 /**
  * The context to analyze a file.

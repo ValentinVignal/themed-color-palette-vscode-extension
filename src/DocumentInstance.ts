@@ -1,13 +1,14 @@
 import { load } from 'js-yaml';
 import * as vscode from 'vscode';
-import { AnalyzeThemedContext, IThemedYaml } from './AnalyzeContext';
+import { AnalyzeThemedContext, Color, IThemedCollectionYaml, IThemedItemYaml } from './AnalyzeContext';
+import { DecorationsMap } from './DecorationMap';
 import { Globals } from './globals';
 import { KeyRegExp } from './utils/KeyRegExp';
 
 
 interface IGlobalYaml {
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  '.themed': IThemedYaml;
+  '.themed': IThemedCollectionYaml;
   // eslint-disable-next-line @typescript-eslint/naming-convention
   '.themes': string[];
   // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -38,6 +39,8 @@ export class DocumentInstance {
    */
   private diagnostics: vscode.Diagnostic[] = [];
   private listener: vscode.Disposable | null = null;
+  private decorations = new DecorationsMap();
+  private rangeMap = new Map<Color, vscode.Range[]>();
 
   constructor(
     public readonly document: vscode.TextDocument,
@@ -59,6 +62,7 @@ export class DocumentInstance {
    * To call when the document is being updated
    */
   update(document: vscode.TextDocument = this.document): void {
+    console.log('onUpdate');
     if (this.disposed) {
       // Don't do anything if the instance has been disposed.
       return;
@@ -71,6 +75,10 @@ export class DocumentInstance {
     // Cleat the state.
     this.diagnostics = [];
     Globals.diagnosticCollection.set(this.document.uri, this.diagnostics);
+    for (const color of this.rangeMap.keys()) {
+      // The empty array will remove the decoration of a removed color in the editor.setDecorations below.
+      this.rangeMap.set(color, []);
+    }
 
     this.text = this.document.getText();
     this.yaml = load(this.text) as IGlobalYaml;
@@ -88,6 +96,15 @@ export class DocumentInstance {
 
     // Send the diagnostics to VSCode.
     Globals.diagnosticCollection.set(this.document.uri, this.diagnostics);
+    for (const editor of vscode.window.visibleTextEditors.filter(editor => editor.document.uri === this.document.uri)) {
+      for (const color of this.rangeMap.keys()) {
+        const ranges = this.rangeMap.get(color)!;
+        editor.setDecorations(this.decorations.get(color), ranges);
+        if (!ranges.length) {
+          this.rangeMap.delete(color);
+        }
+      }
+    }
   }
 
   /**
@@ -97,6 +114,7 @@ export class DocumentInstance {
     this.disposed = true;
     this.listener?.dispose();
     this.listener = null;
+    this.decorations.dispose();
     Globals.diagnosticCollection.set(this.document.uri, []);
   }
 
@@ -129,9 +147,9 @@ export class DocumentInstance {
         // Updates the index to be sure to skip the all collection.
         index = this.analyzeThemed(new AnalyzeThemedContext({
           index: index + indexOffset,
-          yaml: context.yaml[key],
+          yaml: (context.yaml as IThemedCollectionYaml)[key]!,
           path: [...context.path, key],
-          platforms: context.yaml['.platforms'] ?? context.platforms, // TODO: Pass correct platforms and check them
+          platforms: context.yaml['.platforms'] ?? context.platforms,
         }));
       }
       return index;
@@ -139,6 +157,9 @@ export class DocumentInstance {
       const text = this.text.substring(context.index);
       this.verifyDefaultTheme(context);
       this.verifyThemeExistence(context);
+      this.addDecorationIfColor(context);
+
+
 
       // Once we are done with the object, we move to the context to the last
       // key.
@@ -208,7 +229,7 @@ export class DocumentInstance {
         if (!definedPlatforms?.includes(platform)) {
           // The platform is valid and defined.
           currentIndex += this.text.substring(currentIndex).indexOf(platform);
-          const position = this.positionFromIndex(currentIndex);
+          const position = this.document.positionAt(currentIndex);
           const diagnostic = new vscode.Diagnostic(
             new vscode.Range(
               position,
@@ -221,7 +242,7 @@ export class DocumentInstance {
         } else if (!context.platforms.includes(platform)) {
           // The platform has been filtered out by a parent and can't be used.
           currentIndex += this.text.substring(currentIndex).indexOf(platform);
-          const position = this.positionFromIndex(currentIndex);
+          const position = this.document.positionAt(currentIndex);
           const diagnostic = new vscode.Diagnostic(
             new vscode.Range(
               position,
@@ -237,10 +258,50 @@ export class DocumentInstance {
 
   }
 
+  private addDecorationIfColor(context: AnalyzeThemedContext): void {
+    const yaml = context.yaml as IThemedItemYaml;
+    if (yaml['.type'] === 'color') {
+      let index = context.index;
+      for (const theme in yaml) {
+        if (theme.startsWith('.')) {
+          // This is an option key. There is not color there.
+          continue;
+        }
+
+        if ((typeof yaml[theme]) !== 'string') {
+          // The color is not hardcoded.
+          continue;
+        }
+
+        // At this point, it the value should be a color of the form `aarrggbb`.
+        const color = yaml[theme] as Color;
+
+
+        const themeRegExp = new KeyRegExp(theme);
+        const match = themeRegExp.exec(this.text.substring(index))!;
+        index += match.index;
+        index += this.text.substring(index).indexOf(color);
+        const position = this.document.positionAt(index);
+
+        const range = new vscode.Range(
+          position,
+          new vscode.Position(position.line, position.character + color.length),
+        );
+        if (!this.rangeMap.has(color)) {
+          this.rangeMap.set(color, [range]);
+        } else {
+          this.rangeMap.get(color)!.push(range);
+        }
+
+      }
+    }
+  }
+
   /**
    * Returns the position corresponding to the index.
    */
   private keyPositionsFromIndex(index: number): [vscode.Position, vscode.Position] {
+    // TODO: Maybe better to use `this.document.positionAt`.
     const match = this.text.substring(0, index).match(/\r\n|\r|\n/g)!;
     const line = match.length;
     const keyMatch = this.text.substring(index).match(/[a-z][a-zA-z0-9]*/)!;
@@ -251,13 +312,7 @@ export class DocumentInstance {
     ];
   }
 
-  private positionFromIndex(index: number): vscode.Position {
-    const text = this.text.substring(0, index);
-    const match = text.match(/\r\n|\r|\n/g)!;
-    const line = match.length;
-    const column = index - text.lastIndexOf('\n') - 1;
 
-    return new vscode.Position(line, column);
-  }
+
 
 }
