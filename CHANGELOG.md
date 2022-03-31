@@ -1,7 +1,7 @@
 # Change Log
 
 
-### [0.0.2] - 2022-03-31
+### [0.0.3] - 2022-03-31
 
 Initial release of the extension.
 - Fix the JSON Schema to support `value` keyword (with potential `withOpacity`) for colors.
