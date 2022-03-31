@@ -382,13 +382,17 @@
           "properties": {
             ".type": {
               "const": "brightness"
-            },
-            ".value": {
+            }
+          },
+          "patternProperties": {
+            "^[a-z][a-zA-Z0-9]*$": {
               "oneOf": [
                 {
+                  "description": "bbbb",
                   "$ref": "#/$defs/brightness"
                 },
                 {
+                  "description": "imported",
                   "$ref": "#/$defs/importedValue"
                 }
               ]
