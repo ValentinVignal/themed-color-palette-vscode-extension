@@ -90,7 +90,7 @@ export class DocumentInstance {
       index: themedIndex,
       yaml: this.yaml['.themed'],
       currentKey: '.themed',
-      path: [],
+      path: ['.themed'],
       platforms: this.yaml['.platforms'] ?? [],
     }));
 
@@ -100,9 +100,12 @@ export class DocumentInstance {
       for (const color of this.rangeMap.keys()) {
         const ranges = this.rangeMap.get(color)!;
         editor.setDecorations(this.decorations.get(color), ranges);
-        if (!ranges.length) {
-          this.rangeMap.delete(color);
-        }
+      }
+    }
+    for (const color of this.rangeMap.keys()) {
+      const ranges = this.rangeMap.get(color)!;
+      if (!ranges.length) {
+        this.rangeMap.delete(color);
       }
     }
   }
@@ -165,7 +168,7 @@ export class DocumentInstance {
       // key.
       const lastKeyRegExp = new KeyRegExp(context.lastKey);
       const match = lastKeyRegExp.exec(text)!;
-      return match.index;
+      return context.index + match.index;
     }
   }
 

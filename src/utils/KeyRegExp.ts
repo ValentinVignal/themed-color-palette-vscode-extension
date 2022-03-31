@@ -4,6 +4,5 @@
 export class KeyRegExp extends RegExp {
   constructor(key: string) {
     super(`^(\t| )*${key.replace('.', '\\.')}:`, 'gm');
-
   }
 }
