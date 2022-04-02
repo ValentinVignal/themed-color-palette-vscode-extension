@@ -1,6 +1,6 @@
 import { load } from 'js-yaml';
 import * as vscode from 'vscode';
-import { AnalyzeContext, Color, IThemedCollectionYaml, IThemedItemYaml } from './AnalyzeContext';
+import { AnalyzeContext, Color, IItemYaml, IThemedCollectionYaml } from './AnalyzeContext';
 import { DecorationsMap } from './DecorationMap';
 import { Globals } from './globals';
 import { KeyRegExp } from './utils/KeyRegExp';
@@ -85,7 +85,7 @@ export class DocumentInstance {
 
 
     const sharedIndex = /^\.shared\:/gm.exec(this.text)!.index;  // Shared index.
-    this.analyzeShared(new AnalyzeContext(
+    this.analyze(new AnalyzeContext(
       {
         index: sharedIndex,
         yaml: this.yaml['.shared'],
@@ -96,7 +96,7 @@ export class DocumentInstance {
     ));
 
     const themedIndex = /^\.themed\:/gm.exec(this.text)!.index;  // Themed index.
-    this.analyzeThemed(new AnalyzeContext({
+    this.analyze(new AnalyzeContext({
       index: themedIndex,
       yaml: this.yaml['.themed'],
       path: [],
@@ -130,40 +130,11 @@ export class DocumentInstance {
     Globals.diagnosticCollection.set(this.document.uri, []);
   }
 
-  /**
-   * Analyzes the shared part of the document.
-   */
-  private analyzeShared(context: AnalyzeContext): number {
-    this.verifyPlatforms(context);
-
-    if (context.isCollection) {
-      let index = context.index;
-      for (const key in context.yaml) {
-        if (key.startsWith('.')) {
-          // This is a option key.
-          continue;
-        }
-        const keyRegExp = new KeyRegExp(key);
-        const match = keyRegExp.exec(this.text.substring(index))!;
-        const indexOffset = match.index;
-        // Updates the index to be sure to skip the all collection.
-        index = this.analyzeShared(new AnalyzeContext({
-          index: index + indexOffset,
-          yaml: (context.yaml as IThemedCollectionYaml)[key]!,
-          path: [...context.path, key],
-          platforms: context.yaml['.platforms'] ?? context.platforms,
-        }));
-      }
-      return index;
-    } else {
-      return context.index;
-    }
-  }
 
   /**
    * Analyzes the themed part of the document.
    */
-  private analyzeThemed(context: AnalyzeContext): AnalyzeContext['index'] {
+  private analyze(context: AnalyzeContext): AnalyzeContext['index'] {
 
     this.verifyPlatforms(context);
 
@@ -179,7 +150,7 @@ export class DocumentInstance {
         const indexOffset = match.index;
 
         // Updates the index to be sure to skip the all collection.
-        index = this.analyzeThemed(new AnalyzeContext({
+        index = this.analyze(new AnalyzeContext({
           index: index + indexOffset,
           yaml: (context.yaml as IThemedCollectionYaml)[key]!,
           path: [...context.path, key],
@@ -189,8 +160,10 @@ export class DocumentInstance {
       return index;
     } else {
       const text = this.text.substring(context.index);
-      this.verifyDefaultTheme(context);
-      this.verifyThemeExistence(context);
+      if (!context.isShared) {
+        this.verifyDefaultTheme(context);
+        this.verifyThemeExistence(context);
+      }
       this.addDecorationIfColor(context);
 
 
@@ -292,26 +265,30 @@ export class DocumentInstance {
 
   }
 
+  private static getValueKeys(yaml: IItemYaml, isShared: boolean): (keyof IItemYaml)[] {
+    if (isShared) {
+      return ['.value' as keyof IItemYaml];
+    } else {
+      return Object.keys(yaml).filter(key => !key.startsWith('.')) as (keyof IItemYaml)[];
+    }
+  }
+
   private addDecorationIfColor(context: AnalyzeContext): void {
-    const yaml = context.yaml as IThemedItemYaml;
+    const yaml = context.yaml as IItemYaml;
     if (yaml['.type'] === 'color') {
       let index = context.index;
-      for (const theme in yaml) {
-        if (theme.startsWith('.')) {
-          // This is an option key. There is not color there.
-          continue;
-        }
-
-        if ((typeof yaml[theme]) !== 'string') {
+      let keys = DocumentInstance.getValueKeys(yaml, context.isShared);
+      for (const key of keys) {
+        if ((typeof yaml[key]) !== 'string') {
           // The color is not hardcoded.
           continue;
         }
 
         // At this point, it the value should be a color of the form `aarrggbb`.
-        const color = yaml[theme] as Color;
+        const color = yaml[key] as Color;
 
 
-        const themeRegExp = new KeyRegExp(theme);
+        const themeRegExp = new KeyRegExp(key);
         const match = themeRegExp.exec(this.text.substring(index))!;
         index += match.index;
         index += this.text.substring(index).indexOf(color);
