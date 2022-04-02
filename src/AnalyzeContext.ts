@@ -1,32 +1,53 @@
 
-
-
-
-export interface IThemedYaml {
+/**
+ * The structure of an object in the yaml file.
+ */
+export interface IYaml {
   // eslint-disable-next-line @typescript-eslint/naming-convention
   '.platforms'?: string[] | undefined;
 }
 
+
+/**
+ * The different supported types.
+ */
 export type ItemType = 'int' | 'double' | 'color' | 'fontWeight' | 'bool' | 'brightness';
 
-
-export type IThemedItemYaml = {
+/**
+ * The structure of an item in the yaml file.
+ */
+export interface IItemYaml extends IYaml {
   // eslint-disable-next-line @typescript-eslint/naming-convention
   '.type': ItemType
+}
+
+
+/**
+ * The structure of an themed item in the yaml file
+ */
+export type IThemedItemYaml = {
   [key: string]: any;
-} & IThemedYaml;
+} & IItemYaml;
+
+export interface ISharedItemYaml extends IItemYaml {
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  '.value': any
+}
 
 
+/**
+ * The structure of a themed collection in the yaml file.
+ */
 export type IThemedCollectionYaml = {
-  [key: string]: IThemedYaml | IThemedItemYaml | undefined;
-} & IThemedYaml;
+  [key: string]: IYaml | IThemedItemYaml | undefined;
+} & IYaml;
 
 
 export type Color = string;
 
 interface IAnalyzeThemedContext {
   index: number;
-  yaml: IThemedYaml;
+  yaml: IYaml;
   currentKey?: string | undefined;
   path: string[];
   platforms: string[];
@@ -36,20 +57,18 @@ interface IAnalyzeThemedContext {
 /**
  * The context to analyze a file.
  */
-export class AnalyzeThemedContext implements IAnalyzeThemedContext {
+export class AnalyzeContext implements IAnalyzeThemedContext {
 
   constructor(context: IAnalyzeThemedContext) {
     this.index = context.index;
     this.yaml = context.yaml;
-    this.currentKey = context.currentKey;
     this.path = context.path;
     this.platforms = context.platforms;
   }
   readonly platforms: string[];
   readonly path: string[];
-  readonly currentKey?: string | undefined;
   readonly index: number;
-  readonly yaml: IThemedYaml;
+  readonly yaml: IYaml;
 
   private _keys: string[] | undefined;
 
@@ -60,12 +79,6 @@ export class AnalyzeThemedContext implements IAnalyzeThemedContext {
     return !this.yaml.hasOwnProperty('.type');
   }
 
-  /**
-   * Returns the current key that is being analyzed.
-   */
-  get key(): string {
-    return this.path.length ? this.path[this.path.length - 1] : this.currentKey!;
-  }
 
   /**
    * Returns the keys of the yaml.
@@ -77,7 +90,15 @@ export class AnalyzeThemedContext implements IAnalyzeThemedContext {
   /**
    * Returns the last key of the yaml file.
    */
-  get lastKey() {
+  get lastKey(): string {
     return this.keys[this.keys.length - 1];
+  }
+
+
+  /**
+   * @returns `true` if this is a shared context (and not a themed one).
+   */
+  get isShared(): boolean {
+    return !!this.path.length && this.path[0] === '.shared';
   }
 }

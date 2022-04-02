@@ -19,8 +19,6 @@ let activeDocumentInstances: DocumentInstance[] = [];
 export function activate(context: vscode.ExtensionContext) {
 
   Globals.diagnosticCollection; // Initialize the diagnostic collection.
-  console.log('activate');
-  // #FFFFFF
 
   vscode.window.onDidChangeVisibleTextEditors(onOpenEditor, null, context.subscriptions);
 

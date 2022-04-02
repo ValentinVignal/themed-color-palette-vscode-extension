@@ -1,6 +1,6 @@
 import { load } from 'js-yaml';
 import * as vscode from 'vscode';
-import { AnalyzeThemedContext, Color, IThemedCollectionYaml, IThemedItemYaml } from './AnalyzeContext';
+import { AnalyzeContext, Color, IThemedCollectionYaml, IThemedItemYaml } from './AnalyzeContext';
 import { DecorationsMap } from './DecorationMap';
 import { Globals } from './globals';
 import { KeyRegExp } from './utils/KeyRegExp';
@@ -8,11 +8,13 @@ import { KeyRegExp } from './utils/KeyRegExp';
 
 interface IGlobalYaml {
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  '.themed': IThemedCollectionYaml;
-  // eslint-disable-next-line @typescript-eslint/naming-convention
   '.themes': string[];
   // eslint-disable-next-line @typescript-eslint/naming-convention
   '.platforms': string[] | undefined;
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  '.shared': IThemedCollectionYaml;
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  '.themed': IThemedCollectionYaml;
 }
 
 
@@ -27,11 +29,13 @@ export class DocumentInstance {
   private text: string = '';
   private yaml: IGlobalYaml = {
     // eslint-disable-next-line @typescript-eslint/naming-convention
-    '.themed': {},
-    // eslint-disable-next-line @typescript-eslint/naming-convention
     '.themes': [],
     // eslint-disable-next-line @typescript-eslint/naming-convention
     '.platforms': [],
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '.shared': {},
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '.themed': {},
   };
 
   /**
@@ -55,14 +59,10 @@ export class DocumentInstance {
     return this.yaml['.themes'][0];
   }
 
-
-
-
   /**
    * To call when the document is being updated
    */
   update(document: vscode.TextDocument = this.document): void {
-    console.log('onUpdate');
     if (this.disposed) {
       // Don't do anything if the instance has been disposed.
       return;
@@ -82,15 +82,24 @@ export class DocumentInstance {
 
     this.text = this.document.getText();
     this.yaml = load(this.text) as IGlobalYaml;
-    // TODO: Call analyze shared
-    this.analyzeShared();
+
+
+    const sharedIndex = /^\.shared\:/gm.exec(this.text)!.index;  // Shared index.
+    this.analyzeShared(new AnalyzeContext(
+      {
+        index: sharedIndex,
+        yaml: this.yaml['.shared'],
+        path: ['.shared'],
+        platforms: this.yaml['.platforms'] ?? [],
+      }
+
+    ));
 
     const themedIndex = /^\.themed\:/gm.exec(this.text)!.index;  // Themed index.
-    this.analyzeThemed(new AnalyzeThemedContext({
+    this.analyzeThemed(new AnalyzeContext({
       index: themedIndex,
       yaml: this.yaml['.themed'],
-      currentKey: '.themed',
-      path: ['.themed'],
+      path: [],
       platforms: this.yaml['.platforms'] ?? [],
     }));
 
@@ -124,15 +133,37 @@ export class DocumentInstance {
   /**
    * Analyzes the shared part of the document.
    */
-  private analyzeShared(): void {
+  private analyzeShared(context: AnalyzeContext): number {
+    this.verifyPlatforms(context);
 
-
+    if (context.isCollection) {
+      let index = context.index;
+      for (const key in context.yaml) {
+        if (key.startsWith('.')) {
+          // This is a option key.
+          continue;
+        }
+        const keyRegExp = new KeyRegExp(key);
+        const match = keyRegExp.exec(this.text.substring(index))!;
+        const indexOffset = match.index;
+        // Updates the index to be sure to skip the all collection.
+        index = this.analyzeShared(new AnalyzeContext({
+          index: index + indexOffset,
+          yaml: (context.yaml as IThemedCollectionYaml)[key]!,
+          path: [...context.path, key],
+          platforms: context.yaml['.platforms'] ?? context.platforms,
+        }));
+      }
+      return index;
+    } else {
+      return context.index;
+    }
   }
 
   /**
    * Analyzes the themed part of the document.
    */
-  private analyzeThemed(context: AnalyzeThemedContext): AnalyzeThemedContext['index'] {
+  private analyzeThemed(context: AnalyzeContext): AnalyzeContext['index'] {
 
     this.verifyPlatforms(context);
 
@@ -148,7 +179,7 @@ export class DocumentInstance {
         const indexOffset = match.index;
 
         // Updates the index to be sure to skip the all collection.
-        index = this.analyzeThemed(new AnalyzeThemedContext({
+        index = this.analyzeThemed(new AnalyzeContext({
           index: index + indexOffset,
           yaml: (context.yaml as IThemedCollectionYaml)[key]!,
           path: [...context.path, key],
@@ -175,7 +206,7 @@ export class DocumentInstance {
   /**
    * Verifies the default theme is always specified in a themed item.
    */
-  private verifyDefaultTheme(context: AnalyzeThemedContext): void {
+  private verifyDefaultTheme(context: AnalyzeContext): void {
     if (!context.yaml.hasOwnProperty(this.defaultTheme)) {
       // The default theme is not specified.
       const diagnostic = new vscode.Diagnostic(
@@ -192,7 +223,7 @@ export class DocumentInstance {
   /**
    * Verifies that all specified themes of the themed item exist.
    */
-  private verifyThemeExistence(context: AnalyzeThemedContext): void {
+  private verifyThemeExistence(context: AnalyzeContext): void {
     for (const key in context.yaml) {
       if (!key.startsWith('.')) {
         // It should be a themed key
@@ -220,7 +251,7 @@ export class DocumentInstance {
    * - Are valid and defined.
    * - Are included in the parent context.
    */
-  private verifyPlatforms(context: AnalyzeThemedContext): void {
+  private verifyPlatforms(context: AnalyzeContext): void {
     const platforms = context.yaml['.platforms'];
     if (platforms) {
       const definedPlatforms = this.yaml['.platforms'];
@@ -261,7 +292,7 @@ export class DocumentInstance {
 
   }
 
-  private addDecorationIfColor(context: AnalyzeThemedContext): void {
+  private addDecorationIfColor(context: AnalyzeContext): void {
     const yaml = context.yaml as IThemedItemYaml;
     if (yaml['.type'] === 'color') {
       let index = context.index;
