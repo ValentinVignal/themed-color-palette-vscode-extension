@@ -1,3 +1,4 @@
+import { ItemType, ItemTypeKey } from "./utils/ItemType";
 
 /**
  * The structure of an object in the yaml file.
@@ -7,18 +8,19 @@ export interface IYaml {
   '.platforms'?: string[] | undefined;
 }
 
+export interface IImportedValue {
+  import: string;
+}
 
-/**
- * The different supported types.
- */
-export type ItemType = 'int' | 'double' | 'color' | 'fontWeight' | 'bool' | 'brightness';
+
+export type IValueYaml = ItemType | IImportedValue;
 
 /**
  * The structure of an item in the yaml file.
  */
 export interface IItemYaml extends IYaml {
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  '.type': ItemType
+  '.type': ItemTypeKey
 }
 
 
@@ -26,12 +28,12 @@ export interface IItemYaml extends IYaml {
  * The structure of an themed item in the yaml file
  */
 export type IThemedItemYaml = {
-  [key: string]: any;
+  [key: string]: IValueYaml;
 } & IItemYaml;
 
 export interface ISharedItemYaml extends IItemYaml {
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  '.value': any
+  '.value': IValueYaml
 }
 
 
@@ -94,11 +96,17 @@ export class AnalyzeContext implements IAnalyzeThemedContext {
     return this.keys[this.keys.length - 1];
   }
 
-
   /**
    * @returns `true` if this is a shared context (and not a themed one).
    */
   get isShared(): boolean {
     return !!this.path.length && this.path[0] === '.shared';
+  }
+
+  /**
+   * @returns `'collectionName.itemName'`.
+   */
+  get pathKey(): string {
+    return this.path.join('.');
   }
 }

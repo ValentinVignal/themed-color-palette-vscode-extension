@@ -1,8 +1,9 @@
 import { load } from 'js-yaml';
 import * as vscode from 'vscode';
-import { AnalyzeContext, Color, IItemYaml, IThemedCollectionYaml } from './AnalyzeContext';
+import { AnalyzeContext, Color, IImportedValue, IItemYaml, IThemedCollectionYaml } from './AnalyzeContext';
 import { DecorationsMap } from './DecorationMap';
 import { Globals } from './globals';
+import { ImportedSharedValue, ImportedThemedValue, ImportedValue } from './ImportedValue';
 import { KeyRegExp } from './utils/KeyRegExp';
 
 
@@ -45,6 +46,10 @@ export class DocumentInstance {
   private listener: vscode.Disposable | null = null;
   private decorations = new DecorationsMap();
   private rangeMap = new Map<Color, vscode.Range[]>();
+  /**
+   * The map of imported values.
+   */
+  private values = new Map<string, ImportedValue>();
 
   constructor(
     public readonly document: vscode.TextDocument,
@@ -79,6 +84,7 @@ export class DocumentInstance {
       // The empty array will remove the decoration of a removed color in the editor.setDecorations below.
       this.rangeMap.set(color, []);
     }
+    this.values.clear();
 
     this.text = this.document.getText();
     this.yaml = load(this.text) as IGlobalYaml;
@@ -117,6 +123,7 @@ export class DocumentInstance {
         this.rangeMap.delete(color);
       }
     }
+
   }
 
   /**
@@ -160,10 +167,12 @@ export class DocumentInstance {
       return index;
     } else {
       const text = this.text.substring(context.index);
+
       if (!context.isShared) {
         this.verifyDefaultTheme(context);
         this.verifyThemeExistence(context);
       }
+      this.registerValue(context);
       this.addDecorationIfColor(context);
 
 
@@ -173,6 +182,55 @@ export class DocumentInstance {
       const lastKeyRegExp = new KeyRegExp(context.lastKey);
       const match = lastKeyRegExp.exec(text)!;
       return context.index + match.index;
+    }
+  }
+
+  /**
+   * Register the value and verifies the imports.
+   */
+  private registerValue(context: AnalyzeContext): void {
+    const yaml = context.yaml as IItemYaml;
+    for (const key of DocumentInstance.getValueKeys(yaml, context.isShared)) {
+      let index = context.index;
+      if (typeof yaml[key] === 'object') {
+        const importPath = (yaml[key] as any as IImportedValue)['import'];
+        if (!importPath) {
+          console.log('yaml', yaml);
+          continue;
+        }
+        const diagnosticMessages: string[] = [];
+        if (!this.values.has(importPath)) {
+          diagnosticMessages.push(`The value \`${importPath}\` does not exist. Make sure the item has been defined ABOVE in the file.`);
+        } else {
+          const importedValue = this.values.get(importPath)!;
+          if (importedValue.type !== yaml['.type']) {
+            diagnosticMessages.push(`The value \`${importPath}\` is not of type \`${yaml['.type']}\` but \`${importedValue.type}\`.`);
+          }
+        }
+        const keyRegExp = new KeyRegExp(key);
+        const match = keyRegExp.exec(this.text.substring(index))!;
+        index += match.index;
+        index += this.text.substring(index).indexOf(importPath);
+        const position = this.document.positionAt(index);
+        for (const diagnosticMessage of diagnosticMessages) {
+          this.diagnostics.push(new vscode.Diagnostic(
+            new vscode.Range(
+              position,
+              new vscode.Position(position.line, position.character + importPath.length)
+            ),
+            diagnosticMessage,
+            vscode.DiagnosticSeverity.Error
+          ));
+        }
+
+      }
+      let value: ImportedValue | undefined;
+      if (context.isShared) {
+        value = new ImportedSharedValue(yaml['.type']);
+      } else {
+        value = new ImportedThemedValue(yaml['.type']);
+      }
+      this.values.set(context.pathKey, value);
     }
   }
 
@@ -277,10 +335,10 @@ export class DocumentInstance {
     const yaml = context.yaml as IItemYaml;
     if (yaml['.type'] === 'color') {
       let index = context.index;
-      let keys = DocumentInstance.getValueKeys(yaml, context.isShared);
-      for (const key of keys) {
+      for (const key of DocumentInstance.getValueKeys(yaml, context.isShared)) {
         if ((typeof yaml[key]) !== 'string') {
           // The color is not hardcoded.
+          // TODO: Support it
           continue;
         }
 
