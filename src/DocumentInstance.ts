@@ -4,6 +4,7 @@ import { AnalyzeContext, Color, IImportedValue, IItemYaml, IThemedCollectionYaml
 import { DecorationsMap } from './DecorationMap';
 import { Globals } from './globals';
 import { ImportedSharedValue, ImportedThemedValue, ImportedValue } from './ImportedValue';
+import { ItemType } from './utils/ItemType';
 import { KeyRegExp } from './utils/KeyRegExp';
 
 
@@ -190,8 +191,12 @@ export class DocumentInstance {
    */
   private registerValue(context: AnalyzeContext): void {
     const yaml = context.yaml as IItemYaml;
+    let values: {
+      [key: string]: ItemType | undefined,
+    } = {};
     for (const key of DocumentInstance.getValueKeys(yaml, context.isShared)) {
       let index = context.index;
+      let value: ItemType | undefined;
       if (typeof yaml[key] === 'object') {
         const importPath = (yaml[key] as any as IImportedValue)['import'];
         if (!importPath) {
@@ -222,16 +227,30 @@ export class DocumentInstance {
             vscode.DiagnosticSeverity.Error
           ));
         }
-
-      }
-      let value: ImportedValue | undefined;
-      if (context.isShared) {
-        value = new ImportedSharedValue(yaml['.type']);
+        if (diagnosticMessages.length) {
+          continue;
+        }
+        // Get the imported value
+        const importedValue = this.values.get(importPath);
+        value = importedValue?.getValue(key);
       } else {
-        value = new ImportedThemedValue(yaml['.type']);
+        value = yaml[key] as ItemType;
       }
-      this.values.set(context.pathKey, value);
+      values[key] = value;
     }
+    let valueToRegister: ImportedValue | undefined;
+    if (context.isShared) {
+      valueToRegister = new ImportedSharedValue(
+        yaml['.type'],
+        values['.value'],
+      );
+    } else {
+      valueToRegister = new ImportedThemedValue(
+        yaml['.type'],
+        values,
+      );
+    }
+    this.values.set(context.pathKey, valueToRegister);
   }
 
   /**
@@ -336,30 +355,40 @@ export class DocumentInstance {
     if (yaml['.type'] === 'color') {
       let index = context.index;
       for (const key of DocumentInstance.getValueKeys(yaml, context.isShared)) {
+        let color: Color | undefined;
+        let stringToDecorate: string | undefined;
         if ((typeof yaml[key]) !== 'string') {
+          const subYaml = yaml[key] as IImportedValue;
           // The color is not hardcoded.
-          // TODO: Support it
-          continue;
+          if (subYaml['value']) {
+            color = subYaml['value'];
+            stringToDecorate = color;
+          } else if (subYaml['import']) {
+            stringToDecorate = subYaml['import']!;
+            color = this.values.get(subYaml['import']!)?.getValue(key) as Color;
+          }
+        } else {
+          // At this point, it the value should be a color of the form `aarrggbb`.
+          color = yaml[key] as Color;
+          stringToDecorate = color;
         }
 
-        // At this point, it the value should be a color of the form `aarrggbb`.
-        const color = yaml[key] as Color;
 
 
         const themeRegExp = new KeyRegExp(key);
         const match = themeRegExp.exec(this.text.substring(index))!;
         index += match.index;
-        index += this.text.substring(index).indexOf(color);
+        index += this.text.substring(index).indexOf(stringToDecorate!);
         const position = this.document.positionAt(index);
 
         const range = new vscode.Range(
           position,
-          new vscode.Position(position.line, position.character + color.length),
+          new vscode.Position(position.line, position.character + stringToDecorate!.length),
         );
-        if (!this.rangeMap.has(color)) {
-          this.rangeMap.set(color, [range]);
+        if (!this.rangeMap.has(color!)) {
+          this.rangeMap.set(color!, [range]);
         } else {
-          this.rangeMap.get(color)!.push(range);
+          this.rangeMap.get(color!)!.push(range);
         }
 
       }

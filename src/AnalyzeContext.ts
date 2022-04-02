@@ -9,7 +9,9 @@ export interface IYaml {
 }
 
 export interface IImportedValue {
-  import: string;
+  import?: string | undefined;
+  value?: string | undefined;
+  withOpacity?: undefined | string | { import: string }
 }
 
 
