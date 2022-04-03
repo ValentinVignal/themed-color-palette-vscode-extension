@@ -49,7 +49,7 @@ export type IThemedCollectionYaml = {
 
 export type Color = string;
 
-interface IAnalyzeThemedContext {
+interface IAnalyzeContext {
   index: number;
   yaml: IYaml;
   currentKey?: string | undefined;
@@ -61,9 +61,9 @@ interface IAnalyzeThemedContext {
 /**
  * The context to analyze a file.
  */
-export class AnalyzeContext implements IAnalyzeThemedContext {
+export class AnalyzeContext implements IAnalyzeContext {
 
-  constructor(context: IAnalyzeThemedContext) {
+  constructor(context: IAnalyzeContext) {
     this.index = context.index;
     this.yaml = context.yaml;
     this.path = context.path;

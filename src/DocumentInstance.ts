@@ -28,7 +28,13 @@ export class DocumentInstance {
    * `true` if the document has been disposed.
    */
   private disposed: boolean = false;
+  /**
+   * The text of the document.
+   */
   private text: string = '';
+  /**
+   * The parsed yaml of the document.
+   */
   private yaml: IGlobalYaml = {
     // eslint-disable-next-line @typescript-eslint/naming-convention
     '.themes': [],
@@ -45,8 +51,17 @@ export class DocumentInstance {
    */
   private diagnostics: vscode.Diagnostic[] = [];
   private listener: vscode.Disposable | null = null;
+  /**
+   * The decorations applied on the documents.
+   */
   private decorations = new DecorationsMap();
+  /**
+   * The ranges for single color decoration (when a value is hardcoded/imported).
+   */
   private singleColorDecorationRangeMap = new Map<Color, vscode.Range[]>();
+  /**
+   * The ranges of multiple colors decoration (for the themed keys).
+   */
   private multipleColorsDecorationRangeMap = new Map<Color, vscode.Range[]>();
   /**
    * The map of imported values.
@@ -95,7 +110,7 @@ export class DocumentInstance {
     this.text = this.document.getText();
     this.yaml = load(this.text) as IGlobalYaml;
 
-
+    // Start by analyzing the shared items.
     const sharedIndex = /^\.shared\:/gm.exec(this.text)!.index;  // Shared index.
     this.analyze(new AnalyzeContext(
       {
@@ -107,6 +122,7 @@ export class DocumentInstance {
 
     ));
 
+    // After we analyzed the shared items, we can analyze the themed items.
     const themedIndex = /^\.themed\:/gm.exec(this.text)!.index;  // Themed index.
     this.analyze(new AnalyzeContext({
       index: themedIndex,
@@ -130,6 +146,7 @@ export class DocumentInstance {
         }
       }
     }
+    // Apply the decorations if any.
     for (const color of this.singleColorDecorationRangeMap.keys()) {
       const ranges = this.singleColorDecorationRangeMap.get(color)!;
       if (!ranges.length) {
@@ -165,6 +182,7 @@ export class DocumentInstance {
     this.verifyPlatforms(context);
 
     if (context.isCollection) {
+      // If it is a collection, we recursively analyze the items inside.
       let index = context.index;
       for (const key in context.yaml) {
         if (key.startsWith('.')) {
@@ -194,8 +212,6 @@ export class DocumentInstance {
       this.registerValue(context);
       this.addDecorationIfColor(context);
 
-
-
       // Once we are done with the object, we move to the context to the last
       // key.
       const lastKeyRegExp = new KeyRegExp(context.lastKey);
@@ -213,10 +229,12 @@ export class DocumentInstance {
       [key: string]: ItemType | undefined,
     } = {};
     for (const key of this.getValueKeys(yaml, context.isShared, false)) {
+      // key is either `'value'` (for shared) or all the themes (for themed).
       let index = context.index;
       let value: ItemType | undefined;
       const subYaml: any = yaml[key] ?? (yaml as any)[this.defaultTheme];
       if (typeof subYaml === 'object') {
+        // It means it is imported (or a color with the key word `'value'`).
         const _subYaml = subYaml as IImportedValue;
         const importPath = _subYaml['import'];
         if (importPath) {
@@ -261,6 +279,9 @@ export class DocumentInstance {
           }
         }
         if (yaml['.type'] === 'color' && subYaml['withOpacity'] !== undefined) {
+          // We need to do the same work for the `'withOpacity'` parameter. It
+          // modifies the imported (or hardcoded) value. It might also be
+          // imported.
           let newOpacityString: string = (value as Color | undefined)?.substring(0, 2) ?? '';
           if (typeof _subYaml['withOpacity'] === 'number') {
             newOpacityString = Math.round(255 * _subYaml['withOpacity']).toString(16);
@@ -411,7 +432,6 @@ export class DocumentInstance {
         }
       }
     }
-
   }
 
   /**
@@ -431,9 +451,14 @@ export class DocumentInstance {
     }
   }
 
+  /**
+   * - Adds the decorations to the "single" colors (where the values are
+   *   specified or imported. It highlight them and adds a colored box in front
+   *   of the values.
+   * - Add the decoration to the "multiple"/themed color. It adds a box of the
+   *   color in each theme after the key.
+   */
   private addDecorationIfColor(context: AnalyzeContext): void {
-    // TODO: Add decoration next to the key for all the themes. (take from the
-    // registered values to get the opacity)
     const yaml = context.yaml as IItemYaml;
     if (yaml['.type'] === 'color') {
       let index = context.index;
@@ -455,8 +480,6 @@ export class DocumentInstance {
           color = yaml[key] as Color;
           stringToDecorate = color;
         }
-
-
 
         const themeRegExp = new KeyRegExp(key);
         const match = themeRegExp.exec(this.text.substring(index))!;
