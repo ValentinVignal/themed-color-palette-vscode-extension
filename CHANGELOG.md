@@ -1,5 +1,13 @@
 # Change Log
 
+### [0.0.5] - 2022-04-03
+
+- Support shared values.
+- Validate the imports.
+- Add lints for imports and values given to `withOpacity` key.
+- Consider `withOpacity` parameter for the decorations.
+- For themed colors, add a box decoration for each theme after the item.
+
 ### [0.0.4] - 2022-03-31
 
 - Properly lint the value (`dark`, `light`) of the themed brightness object.
