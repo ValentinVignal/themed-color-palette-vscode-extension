@@ -2,7 +2,7 @@
   "name": "themed-color-palette-vscode-extension",
   "displayName": "Themed color palette",
   "description": "An extension to lint theme.yaml files.",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "valentin-vignal",
   "engines": {
     "vscode": "^1.65.0"

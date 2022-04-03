@@ -1,6 +1,6 @@
 # Change Log
 
-### [0.0.5] - 2022-04-03
+### [0.0.6] - 2022-04-03
 
 - Support shared values.
 - Validate the imports.
