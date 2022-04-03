@@ -4,7 +4,7 @@ A VSCode extension to lint a `.theme.yaml` file used for https://github.com/Vale
 
 ## Features
 
-It provides a JSON Schema a lints to help you fill your `.theme.yaml` file.
+It provides a JSON Schema and lints to help you fill your `.theme.yaml` file.
 
 ## Requirements
 
