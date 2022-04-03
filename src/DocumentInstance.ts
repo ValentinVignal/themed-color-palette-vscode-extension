@@ -495,18 +495,12 @@ export class DocumentInstance {
    * Returns the position corresponding to the index.
    */
   private keyPositionsFromIndex(index: number): [vscode.Position, vscode.Position] {
-    // TODO: Maybe better to use `this.document.positionAt`.
-    const match = this.text.substring(0, index).match(/\r\n|\r|\n/g)!;
-    const line = match.length;
+    const documentPosition = this.document.positionAt(index);
     const keyMatch = this.text.substring(index).match(/[a-z][a-zA-z0-9]*/)!;
 
     return [
-      new vscode.Position(line, keyMatch.index!),
-      new vscode.Position(line, keyMatch.index! + keyMatch[0].length),
+      new vscode.Position(documentPosition.line, keyMatch.index!),
+      new vscode.Position(documentPosition.line, keyMatch.index! + keyMatch[0].length),
     ];
   }
-
-
-
-
 }
