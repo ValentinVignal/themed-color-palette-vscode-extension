@@ -46,7 +46,8 @@ export class DocumentInstance {
   private diagnostics: vscode.Diagnostic[] = [];
   private listener: vscode.Disposable | null = null;
   private decorations = new DecorationsMap();
-  private rangeMap = new Map<Color, vscode.Range[]>();
+  private singleColorDecorationRangeMap = new Map<Color, vscode.Range[]>();
+  private multipleColorsDecorationRangeMap = new Map<Color, vscode.Range[]>();
   /**
    * The map of imported values.
    */
@@ -81,9 +82,13 @@ export class DocumentInstance {
     // Cleat the state.
     this.diagnostics = [];
     Globals.diagnosticCollection.set(this.document.uri, this.diagnostics);
-    for (const color of this.rangeMap.keys()) {
+    for (const color of this.singleColorDecorationRangeMap.keys()) {
       // The empty array will remove the decoration of a removed color in the editor.setDecorations below.
-      this.rangeMap.set(color, []);
+      this.singleColorDecorationRangeMap.set(color, []);
+    }
+    for (const colors of this.multipleColorsDecorationRangeMap.keys()) {
+      // The empty array will remove the decoration of a removed color in the editor.setDecorations below.
+      this.multipleColorsDecorationRangeMap.set(colors, []);
     }
     this.values.clear();
 
@@ -113,15 +118,28 @@ export class DocumentInstance {
     // Send the diagnostics to VSCode.
     Globals.diagnosticCollection.set(this.document.uri, this.diagnostics);
     for (const editor of vscode.window.visibleTextEditors.filter(editor => editor.document.uri === this.document.uri)) {
-      for (const color of this.rangeMap.keys()) {
-        const ranges = this.rangeMap.get(color)!;
-        editor.setDecorations(this.decorations.get(color), ranges);
+      for (const color of this.singleColorDecorationRangeMap.keys()) {
+        const ranges = this.singleColorDecorationRangeMap.get(color)!;
+        editor.setDecorations(this.decorations.getSingleColor(color), ranges);
+      }
+      for (const color of this.multipleColorsDecorationRangeMap.keys()) {
+        const ranges = this.multipleColorsDecorationRangeMap.get(color)!;
+        const decorations = this.decorations.getMultipleColors(color);
+        for (const decoration of decorations) {
+          editor.setDecorations(decoration, ranges);
+        }
       }
     }
-    for (const color of this.rangeMap.keys()) {
-      const ranges = this.rangeMap.get(color)!;
+    for (const color of this.singleColorDecorationRangeMap.keys()) {
+      const ranges = this.singleColorDecorationRangeMap.get(color)!;
       if (!ranges.length) {
-        this.rangeMap.delete(color);
+        this.singleColorDecorationRangeMap.delete(color);
+      }
+    }
+    for (const colors of this.multipleColorsDecorationRangeMap.keys()) {
+      const ranges = this.multipleColorsDecorationRangeMap.get(colors)!;
+      if (!ranges.length) {
+        this.singleColorDecorationRangeMap.delete(colors);
       }
     }
 
@@ -194,45 +212,99 @@ export class DocumentInstance {
     let values: {
       [key: string]: ItemType | undefined,
     } = {};
-    for (const key of DocumentInstance.getValueKeys(yaml, context.isShared)) {
+    for (const key of this.getValueKeys(yaml, context.isShared, false)) {
       let index = context.index;
       let value: ItemType | undefined;
-      if (typeof yaml[key] === 'object') {
-        const importPath = (yaml[key] as any as IImportedValue)['import'];
-        if (!importPath) {
-          console.log('yaml', yaml);
-          continue;
-        }
-        const diagnosticMessages: string[] = [];
-        if (!this.values.has(importPath)) {
-          diagnosticMessages.push(`The value \`${importPath}\` does not exist. Make sure the item has been defined ABOVE in the file.`);
+      const subYaml: any = yaml[key] ?? (yaml as any)[this.defaultTheme];
+      if (typeof subYaml === 'object') {
+        const _subYaml = subYaml as IImportedValue;
+        const importPath = _subYaml['import'];
+        if (importPath) {
+          const diagnosticMessages: string[] = [];
+          if (!this.values.has(importPath)) {
+            diagnosticMessages.push(`The value \`${importPath}\` does not exist. Make sure the item has been defined ABOVE in the file.`);
+          } else {
+            const importedValue = this.values.get(importPath)!;
+            if (importedValue.type !== yaml['.type']) {
+              diagnosticMessages.push(`The value \`${importPath}\` is not of type \`${yaml['.type']}\` but \`${importedValue.type}\`.`);
+            }
+          }
+          const keyRegExp = new KeyRegExp(key);
+          const match = keyRegExp.exec(this.text.substring(index))!;
+          index += match.index;
+          index += this.text.substring(index).indexOf(importPath);
+          const position = this.document.positionAt(index);
+          for (const diagnosticMessage of diagnosticMessages) {
+            this.diagnostics.push(new vscode.Diagnostic(
+              new vscode.Range(
+                position,
+                new vscode.Position(position.line, position.character + importPath.length)
+              ),
+              diagnosticMessage,
+              vscode.DiagnosticSeverity.Error
+            ));
+          }
+          if (diagnosticMessages.length) {
+            continue;
+          }
+          // Get the imported value
+          const importedValue = this.values.get(importPath);
+          value = importedValue?.getValue(key);   // Get opacity if needed 
         } else {
-          const importedValue = this.values.get(importPath)!;
-          if (importedValue.type !== yaml['.type']) {
-            diagnosticMessages.push(`The value \`${importPath}\` is not of type \`${yaml['.type']}\` but \`${importedValue.type}\`.`);
+          // The path could not exist because the user did something wrong or
+          // because he specified a value instead.
+          if (_subYaml['value'] !== undefined) {
+            value = _subYaml['value'];
+          } else {
+            // The user might have done something wrong;
+            continue;
           }
         }
-        const keyRegExp = new KeyRegExp(key);
-        const match = keyRegExp.exec(this.text.substring(index))!;
-        index += match.index;
-        index += this.text.substring(index).indexOf(importPath);
-        const position = this.document.positionAt(index);
-        for (const diagnosticMessage of diagnosticMessages) {
-          this.diagnostics.push(new vscode.Diagnostic(
-            new vscode.Range(
-              position,
-              new vscode.Position(position.line, position.character + importPath.length)
-            ),
-            diagnosticMessage,
-            vscode.DiagnosticSeverity.Error
-          ));
+        if (yaml['.type'] === 'color' && subYaml['withOpacity'] !== undefined) {
+          let newOpacityString: string = (value as Color | undefined)?.substring(0, 2) ?? '';
+          if (typeof _subYaml['withOpacity'] === 'number') {
+            newOpacityString = Math.round(255 * _subYaml['withOpacity']).toString(16);
+          } else if ((_subYaml['withOpacity'] as { import: string })['import']) {
+            const importPath: string = (_subYaml['withOpacity'] as { import: string })['import'];
+            // This is imported.
+            const diagnosticMessages: string[] = [];
+            if (!this.values.has(importPath)) {
+              diagnosticMessages.push(`The value \`${importPath}\` does not exist. Make sure the item has been defined ABOVE in the file.`);
+            } else {
+              const importedValue = this.values.get(importPath)!;
+              if (importedValue.type !== 'double') {
+                diagnosticMessages.push(`The value \`${importPath}\` is not of type \`double\` but \`${importedValue.type}\`.`);
+              } else {
+                const newOpacityDouble = importedValue.getValue(key)! as number;
+                if (!(0 <= newOpacityDouble && newOpacityDouble <= 1)) {
+                  if (context.isShared) {
+                    diagnosticMessages.push(`The value \`${importPath}\` is \`${newOpacityDouble}\` but it must be between 0 and 1.`);
+                  } else {
+                    diagnosticMessages.push(`The value \`${importPath}\` for the theme \`${key}\` is \`${newOpacityDouble}\` but it must be between 0 and 1.`);
+                  }
+                } else {
+                  newOpacityString = Math.round(255 * (importedValue.getValue(key)! as number)).toString(16);
+                }
+              }
+            }
+            const keyRegExp = new KeyRegExp(key);
+            const match = keyRegExp.exec(this.text.substring(index))!;
+            index += match.index;
+            index += this.text.substring(index).indexOf(importPath);
+            const position = this.document.positionAt(index);
+            for (const diagnosticMessage of diagnosticMessages) {
+              this.diagnostics.push(new vscode.Diagnostic(
+                new vscode.Range(
+                  position,
+                  new vscode.Position(position.line, position.character + importPath.length)
+                ),
+                diagnosticMessage,
+                vscode.DiagnosticSeverity.Error
+              ));
+            }
+          }
+          value = `${newOpacityString}${(value as Color | undefined)?.substring(2)}`;
         }
-        if (diagnosticMessages.length) {
-          continue;
-        }
-        // Get the imported value
-        const importedValue = this.values.get(importPath);
-        value = importedValue?.getValue(key);
       } else {
         value = yaml[key] as ItemType;
       }
@@ -342,19 +414,30 @@ export class DocumentInstance {
 
   }
 
-  private static getValueKeys(yaml: IItemYaml, isShared: boolean): (keyof IItemYaml)[] {
+  /**
+   *
+   * @param onlySpecified If `true`, it returns only the specified keys in the
+   * yaml. If `false`, it returns all the themes for a themed value.
+   */
+  private getValueKeys(yaml: IItemYaml, isShared: boolean, onlySpecified: boolean = true): (keyof IItemYaml)[] {
     if (isShared) {
       return ['.value' as keyof IItemYaml];
     } else {
-      return Object.keys(yaml).filter(key => !key.startsWith('.')) as (keyof IItemYaml)[];
+      if (onlySpecified) {
+        return Object.keys(yaml).filter(key => !key.startsWith('.')) as (keyof IItemYaml)[];
+      } else {
+        return this.yaml['.themes'] as string[] as (keyof IItemYaml)[];
+      }
     }
   }
 
   private addDecorationIfColor(context: AnalyzeContext): void {
+    // TODO: Add decoration next to the key for all the themes. (take from the
+    // registered values to get the opacity)
     const yaml = context.yaml as IItemYaml;
     if (yaml['.type'] === 'color') {
       let index = context.index;
-      for (const key of DocumentInstance.getValueKeys(yaml, context.isShared)) {
+      for (const key of this.getValueKeys(yaml, context.isShared)) {
         let color: Color | undefined;
         let stringToDecorate: string | undefined;
         if ((typeof yaml[key]) !== 'string') {
@@ -385,12 +468,25 @@ export class DocumentInstance {
           position,
           new vscode.Position(position.line, position.character + stringToDecorate!.length),
         );
-        if (!this.rangeMap.has(color!)) {
-          this.rangeMap.set(color!, [range]);
+        if (!this.singleColorDecorationRangeMap.has(color!)) {
+          this.singleColorDecorationRangeMap.set(color!, [range]);
         } else {
-          this.rangeMap.get(color!)!.push(range);
+          this.singleColorDecorationRangeMap.get(color!)!.push(range);
         }
-
+      }
+      if (!context.isShared) {
+        // Displays the boxes after the key for all the themes.
+        const value = this.values.get(context.pathKey);
+        if (!value) {
+          return;
+        }
+        const colors = this.yaml['.themes'].map(theme => value.getValue(theme)).join(',');
+        const range = new vscode.Range(...this.keyPositionsFromIndex(context.index));
+        if (!this.multipleColorsDecorationRangeMap.has(colors)) {
+          this.multipleColorsDecorationRangeMap.set(colors, [range]);
+        } else {
+          this.multipleColorsDecorationRangeMap.get(colors)!.push(range);
+        }
       }
     }
   }

@@ -94,10 +94,11 @@
           "description": "If specified, the imported color's opacity will be overridden. You can either specify the opacity directly (between 0 and 1) or import an value created above in the file.",
           "oneOf": [
             {
+              "maximum": 1,
+              "minimum": 0,
               "type": "number"
             },
             {
-              "description": "If specified, the imported color's opacity will be overridden. You can either specify the opacity directly (between 0 and 1) or import an value created above in the file.",
               "$ref": "#/$defs/importedValue"
             }
           ]

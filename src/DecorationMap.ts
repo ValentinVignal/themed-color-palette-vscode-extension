@@ -2,27 +2,27 @@ import * as vscode from 'vscode';
 import { Color } from './AnalyzeContext';
 
 export class DecorationsMap {
-  private map = new Map<Color, vscode.TextEditorDecorationType>();
+  private singleColorMap = new Map<Color, vscode.TextEditorDecorationType>();
+  private multipleColorsMap = new Map<Color, vscode.TextEditorDecorationType[]>();
 
 
   /**
    * Returns the {@link vscode.TextEditorDecorationType} associated to the color
    * {@link color}.
    */
-  get(color: string): vscode.TextEditorDecorationType {
-    if (this.map.has(color)) { return this.map.get(color)!; }
+  getSingleColor(color: string): vscode.TextEditorDecorationType {
+    if (this.singleColorMap.has(color)) { return this.singleColorMap.get(color)!; }
 
-    const red = parseInt(color.substring(2, 4), 16);
-    const green = parseInt(color.substring(4, 6), 16);
-    const blue = parseInt(color.substring(6, 8), 16);
-    const rgba = '#' + color.substring(2) + color.substring(0, 2);
-    const isLight = DecorationsMap.isColorLight(red, green, blue);
-    const colorContrast = isLight ? '#000000ff' : '#ffffffff';
+
+    const {
+      color: rgba,
+      contrast,
+    } = DecorationsMap.getColorAndColorContrast(color);
     const decorationType = vscode.window.createTextEditorDecorationType(
       {
         backgroundColor: rgba,
-        color: colorContrast,
-        border: `3px solid ${color}`,
+        color: contrast,
+        border: `3px solid ${rgba}`,
         borderRadius: '3px',
         before: {
           contentText: ' ',
@@ -30,13 +30,57 @@ export class DecorationsMap {
           width: '0.8em',
           height: '0.8em',
           backgroundColor: rgba,
-          border: `1px solid ${colorContrast}`,
+          border: `1px solid ${contrast}`,
         },
         overviewRulerColor: rgba,
       },
     );
-    this.map.set(color, decorationType);
+    this.singleColorMap.set(color, decorationType);
     return decorationType;
+  }
+
+  /**
+   * 
+   * @param colors the colors separated with a `','`.
+   */
+  getMultipleColors(colors: string): vscode.TextEditorDecorationType[] {
+    if (this.multipleColorsMap.has(colors)) {
+      return this.multipleColorsMap.get(colors)!;
+    }
+    const colorList = colors.split(',');
+    const decorationTypes: vscode.TextEditorDecorationType[] = [];
+    for (const color of colorList) {
+      const { color: rgba, contrast } = DecorationsMap.getColorAndColorContrast(color);
+      decorationTypes.push(vscode.window.createTextEditorDecorationType(
+        {
+          after: {
+            contentText: ' ',
+            margin: '0.1em 0.2em 0 0.2em',
+            width: '0.8em',
+            height: '0.8em',
+            backgroundColor: rgba,
+            border: `1px solid ${contrast}`,
+          },
+        },
+      ));
+
+    }
+    this.multipleColorsMap.set(colors, decorationTypes);
+    return decorationTypes;
+  }
+
+  private static getColorAndColorContrast(color: Color): { color: Color, contrast: Color } {
+    const red = parseInt(color.substring(2, 4), 16);
+    const green = parseInt(color.substring(4, 6), 16);
+    const blue = parseInt(color.substring(6, 8), 16);
+    const rgba = '#' + color.substring(2) + color.substring(0, 2);
+    const isLight = DecorationsMap.isColorLight(red, green, blue);
+    const colorContrast = isLight ? '#000000ff' : '#ffffffff';
+    return {
+      color: rgba,
+      contrast: colorContrast,
+    };
+
   }
 
   /**
@@ -49,8 +93,13 @@ export class DecorationsMap {
   }
 
   dispose(): void {
-    for (const decorationType of this.map.values()) {
+    for (const decorationType of this.singleColorMap.values()) {
       decorationType.dispose();
+    }
+    for (const decorationTypes of this.multipleColorsMap.values()) {
+      for (const decorationType of decorationTypes) {
+        decorationType.dispose();
+      }
     }
   }
 
