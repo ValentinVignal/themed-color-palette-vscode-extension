@@ -1,5 +1,8 @@
 # Change Log
 
+### [0.0.7] - 2022-04-04
+- Correctly reuse the non-imported value of the default theme for unspecified themes.
+
 ### [0.0.6] - 2022-04-03
 
 - Support shared values.
