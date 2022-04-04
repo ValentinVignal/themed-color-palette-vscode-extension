@@ -136,7 +136,10 @@ export class DocumentInstance {
     for (const editor of vscode.window.visibleTextEditors.filter(editor => editor.document.uri === this.document.uri)) {
       for (const color of this.singleColorDecorationRangeMap.keys()) {
         const ranges = this.singleColorDecorationRangeMap.get(color)!;
-        editor.setDecorations(this.decorations.getSingleColor(color), ranges);
+        const decorationType = this.decorations.getSingleColor(color);
+        if (decorationType !== null) {
+          editor.setDecorations(decorationType, ranges);
+        }
       }
       for (const color of this.multipleColorsDecorationRangeMap.keys()) {
         const ranges = this.multipleColorsDecorationRangeMap.get(color)!;
@@ -232,7 +235,7 @@ export class DocumentInstance {
       // key is either `'value'` (for shared) or all the themes (for themed).
       let index = context.index;
       let value: ItemType | undefined;
-      const subYaml: any = yaml[key] ?? (yaml as any)[this.defaultTheme];
+      const subYaml: any = yaml[key] ?? (yaml as any)[this.defaultTheme]; // If a theme is not specified, we use the value/logic of the default theme.
       if (typeof subYaml === 'object') {
         // It means it is imported (or a color with the key word `'value'`).
         const _subYaml = subYaml as IImportedValue;
@@ -327,7 +330,7 @@ export class DocumentInstance {
           value = `${newOpacityString}${(value as Color | undefined)?.substring(2)}`;
         }
       } else {
-        value = yaml[key] as ItemType;
+        value = subYaml as ItemType;
       }
       values[key] = value;
     }

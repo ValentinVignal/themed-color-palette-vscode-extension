@@ -10,29 +10,28 @@ export class DecorationsMap {
    * Returns the {@link vscode.TextEditorDecorationType} associated to the color
    * {@link color}.
    */
-  getSingleColor(color: string): vscode.TextEditorDecorationType {
+  getSingleColor(color: string): vscode.TextEditorDecorationType | null {
     if (this.singleColorMap.has(color)) { return this.singleColorMap.get(color)!; }
 
-
-    const {
-      color: rgba,
-      contrast,
-    } = DecorationsMap.getColorAndColorContrast(color);
+    const colorAndContrast = DecorationsMap.getColorAndColorContrast(color);
+    if (colorAndContrast === null) {
+      return null;
+    }
     const decorationType = vscode.window.createTextEditorDecorationType(
       {
-        backgroundColor: rgba,
-        color: contrast,
-        border: `3px solid ${rgba}`,
+        backgroundColor: colorAndContrast.color,
+        color: colorAndContrast.contrast,
+        border: `3px solid ${colorAndContrast.color}`,
         borderRadius: '3px',
         before: {
           contentText: ' ',
           margin: '0.1em 0.2em 0 0.2em',
           width: '0.8em',
           height: '0.8em',
-          backgroundColor: rgba,
-          border: `1px solid ${contrast}`,
+          backgroundColor: colorAndContrast.color,
+          border: `1px solid ${colorAndContrast.contrast}`,
         },
-        overviewRulerColor: rgba,
+        overviewRulerColor: colorAndContrast.color,
       },
     );
     this.singleColorMap.set(color, decorationType);
@@ -50,36 +49,42 @@ export class DecorationsMap {
     const colorList = colors.split(',');
     const decorationTypes: vscode.TextEditorDecorationType[] = [];
     for (const color of colorList) {
-      const { color: rgba, contrast } = DecorationsMap.getColorAndColorContrast(color);
-      decorationTypes.push(vscode.window.createTextEditorDecorationType(
-        {
-          after: {
-            contentText: ' ',
-            margin: '0.1em 0.2em 0 0.2em',
-            width: '0.8em',
-            height: '0.8em',
-            backgroundColor: rgba,
-            border: `1px solid ${contrast}`,
+      const colorAndContrast = DecorationsMap.getColorAndColorContrast(color);
+      if (colorAndContrast !== null) {
+        decorationTypes.push(vscode.window.createTextEditorDecorationType(
+          {
+            after: {
+              contentText: ' ',
+              margin: '0.1em 0.2em 0 0.2em',
+              width: '0.8em',
+              height: '0.8em',
+              backgroundColor: colorAndContrast!.color,
+              border: `1px solid ${colorAndContrast!.contrast}`,
+            },
           },
-        },
-      ));
+        ));
+      }
 
     }
     this.multipleColorsMap.set(colors, decorationTypes);
     return decorationTypes;
   }
 
-  private static getColorAndColorContrast(color: Color): { color: Color, contrast: Color } {
-    const red = parseInt(color.substring(2, 4), 16);
-    const green = parseInt(color.substring(4, 6), 16);
-    const blue = parseInt(color.substring(6, 8), 16);
-    const rgba = '#' + color.substring(2) + color.substring(0, 2);
-    const isLight = DecorationsMap.isColorLight(red, green, blue);
-    const colorContrast = isLight ? '#000000ff' : '#ffffffff';
-    return {
-      color: rgba,
-      contrast: colorContrast,
-    };
+  private static getColorAndColorContrast(color: Color): { color: Color, contrast: Color } | null {
+    try {
+      const red = parseInt(color.substring(2, 4), 16);
+      const green = parseInt(color.substring(4, 6), 16);
+      const blue = parseInt(color.substring(6, 8), 16);
+      const rgba = '#' + color.substring(2) + color.substring(0, 2);
+      const isLight = DecorationsMap.isColorLight(red, green, blue);
+      const colorContrast = isLight ? '#000000ff' : '#ffffffff';
+      return {
+        color: rgba,
+        contrast: colorContrast,
+      };
+    } catch {
+      return null;
+    }
 
   }
 
