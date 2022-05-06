@@ -18,4 +18,10 @@ jobs:
         with:
           node-version: 16.x
       - run: npm install
-      - run: xvfb-run -a npm test
+      - run: npm test
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v2
+        with:
+          # This is the name of the coverage reporter.
+          # cspell:ignore cobertura
+          files: ./coverage/clover.xml
