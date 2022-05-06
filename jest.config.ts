@@ -5,12 +5,14 @@
 
 export default {
   // All imported modules in your tests should be mocked automatically
+  // cSpell: disable-next-line
   // automock: false,
 
   // Stop running tests after `n` failures
   // bail: 0,
 
   // The directory where Jest should store its cached dependency information
+  // cSpell:disable-next-line
   // cacheDirectory: "/private/var/folders/pl/d95zgbzd4hbb3z0rt9bl02z40000gn/T/jest_dx",
 
 
@@ -35,6 +37,7 @@ export default {
   // coverageReporters: [
   //   "json",
   //   "text",
+  //    // cSpell:disable-next-line
   //   "lcov",
   //   "clover"
   // ],
@@ -132,6 +135,7 @@ export default {
   // slowTestThreshold: 5,
 
   // A list of paths to snapshot serializer modules Jest should use for snapshot testing
+  // cSpell: disable-next-line
   // snapshotSerializers: [],
 
   // The test environment that will be used for testing
@@ -183,6 +187,7 @@ export default {
   // ],
 
   // An array of regexp pattern strings that are matched against all modules before the module loader will automatically return a mock for them
+  // cSpell: disable-next-line
   // unmockedModulePathPatterns: undefined,
 
   // Indicates whether each individual test should be reported during the run
