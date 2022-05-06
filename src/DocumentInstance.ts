@@ -232,10 +232,11 @@ export class DocumentInstance {
       [key: string]: ItemType | undefined,
     } = {};
     for (const key of this.getValueKeys(yaml, context.isShared, false)) {
-      // key is either `'value'` (for shared) or all the themes (for themed).
+      // key is either `'.value'` (for shared) or all the themes (for themed).
       let index = context.index;
       let value: ItemType | undefined;
       const subYaml: any = yaml[key] ?? (yaml as any)[this.defaultTheme]; // If a theme is not specified, we use the value/logic of the default theme.
+      const delegateToDefaultTheme = !yaml[key];
       if (typeof subYaml === 'object') {
         // It means it is imported (or a color with the key word `'value'`).
         const _subYaml = subYaml as IImportedValue;
@@ -250,23 +251,28 @@ export class DocumentInstance {
               diagnosticMessages.push(`The value \`${importPath}\` is not of type \`${yaml['.type']}\` but \`${importedValue.type}\`.`);
             }
           }
-          const keyRegExp = new KeyRegExp(key);
-          const match = keyRegExp.exec(this.text.substring(index))!;
-          index += match.index;
-          index += this.text.substring(index).indexOf(importPath);
-          const position = this.document.positionAt(index);
-          for (const diagnosticMessage of diagnosticMessages) {
-            this.diagnostics.push(new vscode.Diagnostic(
-              new vscode.Range(
-                position,
-                new vscode.Position(position.line, position.character + importPath.length)
-              ),
-              diagnosticMessage,
-              vscode.DiagnosticSeverity.Error
-            ));
-          }
-          if (diagnosticMessages.length) {
-            continue;
+          if (!delegateToDefaultTheme) {
+            // We only need to lint the value if it is not delegated to the
+            // default theme. The default theme should have been handle before
+            // already.
+            const keyRegExp = new KeyRegExp(key);
+            const match = keyRegExp.exec(this.text.substring(index))!;
+            index += match.index;
+            index += this.text.substring(index).indexOf(importPath);
+            const position = this.document.positionAt(index);
+            for (const diagnosticMessage of diagnosticMessages) {
+              this.diagnostics.push(new vscode.Diagnostic(
+                new vscode.Range(
+                  position,
+                  new vscode.Position(position.line, position.character + importPath.length)
+                ),
+                diagnosticMessage,
+                vscode.DiagnosticSeverity.Error
+              ));
+            }
+            if (diagnosticMessages.length) {
+              continue;
+            }
           }
           // Get the imported value
           const importedValue = this.values.get(importPath);
@@ -311,20 +317,25 @@ export class DocumentInstance {
                 }
               }
             }
-            const keyRegExp = new KeyRegExp(key);
-            const match = keyRegExp.exec(this.text.substring(index))!;
-            index += match.index;
-            index += this.text.substring(index).indexOf(importPath);
-            const position = this.document.positionAt(index);
-            for (const diagnosticMessage of diagnosticMessages) {
-              this.diagnostics.push(new vscode.Diagnostic(
-                new vscode.Range(
-                  position,
-                  new vscode.Position(position.line, position.character + importPath.length)
-                ),
-                diagnosticMessage,
-                vscode.DiagnosticSeverity.Error
-              ));
+            if (!delegateToDefaultTheme) {
+              // We only need to lint the value if it is not delegated to the
+              // default theme. The default theme should have been handle before
+              // already.
+              const keyRegExp = new KeyRegExp(key);
+              const match = keyRegExp.exec(this.text.substring(index))!;
+              index += match.index;
+              index += this.text.substring(index).indexOf(importPath);
+              const position = this.document.positionAt(index);
+              for (const diagnosticMessage of diagnosticMessages) {
+                this.diagnostics.push(new vscode.Diagnostic(
+                  new vscode.Range(
+                    position,
+                    new vscode.Position(position.line, position.character + importPath.length)
+                  ),
+                  diagnosticMessage,
+                  vscode.DiagnosticSeverity.Error
+                ));
+              }
             }
           }
           value = `${newOpacityString}${(value as Color | undefined)?.substring(2)}`;
