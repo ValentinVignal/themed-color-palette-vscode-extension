@@ -1,5 +1,8 @@
 # Change Log
 
+### [0.0.8] - 2022-05-06
+- Fix bug when there are more than 3 themes and the extension was crashing.
+
 ### [0.0.7] - 2022-04-04
 - Correctly reuse the non-imported value of the default theme for unspecified themes.
 
