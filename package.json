@@ -35,20 +35,25 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js"
+    "test": "jest"
   },
   "devDependencies": {
+    "@babel/core": "^7.17.10",
+    "@babel/preset-env": "^7.17.10",
+    "@babel/preset-typescript": "^7.16.7",
     "@types/glob": "^7.2.0",
+    "@types/jest": "^27.5.0",
     "@types/js-yaml": "^4.0.5",
-    "@types/mocha": "^9.1.0",
     "@types/node": "14.x",
     "@types/vscode": "^1.65.0",
     "@typescript-eslint/eslint-plugin": "^5.12.1",
     "@typescript-eslint/parser": "^5.12.1",
-    "@vscode/test-electron": "^2.1.2",
+    "babel-jest": "^28.1.0",
     "eslint": "^8.9.0",
     "glob": "^7.2.0",
-    "mocha": "^9.2.1",
+    "jest": "^28.1.0",
+    "ts-jest": "^28.0.1",
+    "ts-node": "^10.7.0",
     "typescript": "^4.5.5"
   },
   "dependencies": {
