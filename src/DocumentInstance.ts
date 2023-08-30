@@ -2,22 +2,23 @@ import { load } from 'js-yaml';
 import * as vscode from 'vscode';
 import { AnalyzeContext, Color, IImportedValue, IItemYaml, IThemedCollectionYaml } from './AnalyzeContext';
 import { DecorationsMap } from './DecorationMap';
-import { Globals } from './globals';
 import { ImportedSharedValue, ImportedThemedValue, ImportedValue } from './ImportedValue';
+import { Globals } from './globals';
 import { ItemType } from './utils/ItemType';
 import { KeyRegExp } from './utils/KeyRegExp';
+import type { Theme } from './utils/Theme';
 
 
-interface IGlobalYaml {
+export type IGlobalYaml = {
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  '.themes': string[];
+  '.themes': (string | { [name: string]: { import: string } })[];
   // eslint-disable-next-line @typescript-eslint/naming-convention
   '.platforms': string[] | undefined;
   // eslint-disable-next-line @typescript-eslint/naming-convention
   '.shared': IThemedCollectionYaml;
   // eslint-disable-next-line @typescript-eslint/naming-convention
   '.themed': IThemedCollectionYaml;
-}
+};
 
 
 /**
@@ -68,6 +69,8 @@ export class DocumentInstance {
    */
   private values = new Map<string, ImportedValue>();
 
+  private themes: Theme[] = [];
+
   constructor(
     public readonly document: vscode.TextDocument,
   ) {
@@ -77,8 +80,8 @@ export class DocumentInstance {
   /**
    * Returns the default theme.
    */
-  private get defaultTheme(): string {
-    return this.yaml['.themes'][0];
+  private get defaultTheme(): keyof IItemYaml {
+    return this.themes[0].name;
   }
 
   /**
@@ -106,9 +109,17 @@ export class DocumentInstance {
       this.multipleColorsDecorationRangeMap.set(colors, []);
     }
     this.values.clear();
+    this.themes = [];
 
     this.text = this.document.getText();
     this.yaml = load(this.text) as IGlobalYaml;
+
+    const themesIndex = /^\.themes\:/gm.exec(this.text)?.index; // Themes index.
+    if (themesIndex === undefined) {
+      // There is no theme specified.
+      return;
+    }
+    this.setThemes(themesIndex);
 
     // Start by analyzing the shared items.
     const sharedIndex = /^\.shared\:/gm.exec(this.text)!.index;  // Shared index.
@@ -235,8 +246,17 @@ export class DocumentInstance {
       // key is either `'.value'` (for shared) or all the themes (for themed).
       let index = context.index;
       let value: ItemType | undefined;
-      const subYaml: any = yaml[key] ?? (yaml as any)[this.defaultTheme]; // If a theme is not specified, we use the value/logic of the default theme.
-      const delegateToDefaultTheme = !yaml[key];
+
+      const getSubYaml = (key: keyof IItemYaml): any => {
+        if (key in yaml) { return yaml[key]; }
+        const theme = this.themes.find(theme => theme.name === key);
+        if (theme?.import) { return getSubYaml(theme!.import!); }
+        return (yaml as any)[this.defaultTheme];
+
+      };
+
+      const subYaml: any = getSubYaml(key); // If a theme is not specified, we use the value/logic of the default theme.
+      const delegateToImportedTheme = !yaml[key];
       if (typeof subYaml === 'object') {
         // It means it is imported (or a color with the key word `'value'`).
         const _subYaml = subYaml as IImportedValue;
@@ -251,7 +271,7 @@ export class DocumentInstance {
               diagnosticMessages.push(`The value \`${importPath}\` is not of type \`${yaml['.type']}\` but \`${importedValue.type}\`.`);
             }
           }
-          if (!delegateToDefaultTheme) {
+          if (!delegateToImportedTheme) {
             // We only need to lint the value if it is not delegated to the
             // default theme. The default theme should have been handle before
             // already.
@@ -317,7 +337,7 @@ export class DocumentInstance {
                 }
               }
             }
-            if (!delegateToDefaultTheme) {
+            if (!delegateToImportedTheme) {
               // We only need to lint the value if it is not delegated to the
               // default theme. The default theme should have been handle before
               // already.
@@ -384,7 +404,7 @@ export class DocumentInstance {
     for (const key in context.yaml) {
       if (!key.startsWith('.')) {
         // It should be a themed key
-        if (!this.yaml['.themes'].includes(key)) {
+        if (!this.themes.map((theme) => theme.name).includes(key as keyof IItemYaml)) {
           // The theme does not exist.
           const keyRegExp = new KeyRegExp(key);
           const match = keyRegExp.exec(this.text.substring(context.index))!;
@@ -460,7 +480,7 @@ export class DocumentInstance {
       if (onlySpecified) {
         return Object.keys(yaml).filter(key => !key.startsWith('.')) as (keyof IItemYaml)[];
       } else {
-        return this.yaml['.themes'] as string[] as (keyof IItemYaml)[];
+        return this.themes.map((theme) => theme.name) as string[] as (keyof IItemYaml)[];
       }
     }
   }
@@ -517,7 +537,7 @@ export class DocumentInstance {
         if (!value) {
           return;
         }
-        const colors = this.yaml['.themes'].map(theme => value.getValue(theme)).join(',');
+        const colors = this.themes.map((theme) => theme.name).map(theme => value.getValue(theme as string)).join(',');
         const range = new vscode.Range(...this.keyPositionsFromIndex(context.index));
         if (!this.multipleColorsDecorationRangeMap.has(colors)) {
           this.multipleColorsDecorationRangeMap.set(colors, [range]);
@@ -539,5 +559,58 @@ export class DocumentInstance {
       new vscode.Position(documentPosition.line, keyMatch.index!),
       new vscode.Position(documentPosition.line, keyMatch.index! + keyMatch[0].length),
     ];
+  }
+
+  private setThemes(index: number): void {
+    const themes = this.yaml['.themes'];
+    for (const theme of themes) {
+
+      /**
+       * Adds a diagnostic to the diagnostics array.
+       */
+      const addDiagnostic = (message: string): void => {
+        const diagnostic = new vscode.Diagnostic(
+          new vscode.Range(
+            ...this.keyPositionsFromIndex(index),
+          ),
+          message,
+          vscode.DiagnosticSeverity.Error,
+        );
+        this.diagnostics.push(diagnostic);
+      };
+
+
+      if (typeof theme === 'string') {
+        this.themes.push({
+          name: theme as keyof IItemYaml,
+        });
+      } else {
+        // TODO: Add correct index from `-`.
+        if (typeof theme !== 'object') {
+          addDiagnostic(
+            `Bad theme type: "${theme}".\nAll the themes must be either a string or an object with a single entry: \`{$themeName: {import: $themeToImport}}\``,
+          );
+          continue;
+        }
+        const keys = Object.keys(theme);
+        if (keys.length !== 1) {
+          addDiagnostic(
+            `Bad theme type: "${JSON.stringify(theme)}".\nAll the themes must be either a string or an object with a single entry: \`{$themeName: {import: $themeToImport}}\``,
+          );
+          continue;
+        }
+        const themeToImport = theme[keys[0]].import as keyof IItemYaml;
+        if (!this.themes.map((theme) => theme.name).includes(themeToImport)) {
+          addDiagnostic(
+            `Unknown theme to import: "${themeToImport}".\nAn imported theme should be defined before being imported.`,
+          );
+          continue;
+        }
+        this.themes.push({
+          name: keys[0] as keyof IItemYaml,
+          import: theme[keys[0]].import as keyof IItemYaml,
+        });
+      }
+    }
   }
 }
