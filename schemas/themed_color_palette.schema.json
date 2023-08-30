@@ -493,7 +493,26 @@
       "description": "The list of themes that are supported. The first one is the default theme and needs to be specified in each and every themed objects. If a theme is not specified for an object, it will use the value/logic of the default theme.",
       "items": {
         "pattern": "^[a-z][a-zA-Z0-9]*$",
-        "type": "string",
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "patternProperties": {
+              "^[a-z][a-zA-Z0-9]*$": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "import": {
+                    "description": "Theme to base this theme on.\n\nIf the current theme doesn't have a value specified, it will fall back to the imported theme.\nBy default, the imported theme is the default theme (the first theme in the list of the themes).",
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ],
         "uniqueItems": true
       },
       "type": "array"
