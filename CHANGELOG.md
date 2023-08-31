@@ -1,5 +1,8 @@
 # Change Log
 
+### [0.1.0] - 2023-07-31
+- Adds support of theme import from another theme.
+
 ### [0.0.8] - 2022-05-06
 - Fix bug when there are more than 3 themes and the extension was crashing.
 
