@@ -1,5 +1,5 @@
 [![codecov](https://codecov.io/gh/ValentinVignal/themed-color-palette-vscode-extension/branch/main/graph/badge.svg?token=h4QRDyuLjI)](https://codecov.io/gh/ValentinVignal/themed-color-palette-vscode-extension)
-[![wakatime](https://wakatime.com/badge/github/ValentinVignal/themed-color-palette-vscode-extension.svg)](https://wakatime.com/badge/github/ValentinVignal/themed-color-palette-vscode-extension)
+[![wakatime](https://wakatime.com/badge/github/ValentinVignal/themed-color-palette-vscode-extension.png)](https://wakatime.com/badge/github/ValentinVignal/themed-color-palette-vscode-extension)
 
 # themed-color-palette-vscode-extension README
 
