@@ -19,7 +19,7 @@
   "exclude": [
     "node_modules",
     "**/*.test.ts",
-    "src/jest",
-    "out"
+    "out",
+    "coverage",
   ],
 }
