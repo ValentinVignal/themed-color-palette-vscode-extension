@@ -13,11 +13,16 @@ export type IGlobalYaml = {
   // eslint-disable-next-line @typescript-eslint/naming-convention
   '.themes': (string | { [name: string]: { import: string } })[];
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  '.platforms': string[] | undefined;
+  '.platforms'?: string[] | undefined;
   // eslint-disable-next-line @typescript-eslint/naming-convention
   '.shared': IThemedCollectionYaml;
   // eslint-disable-next-line @typescript-eslint/naming-convention
   '.themed': IThemedCollectionYaml;
+};
+
+type Hover = {
+  range: vscode.Range;
+  colors: Map<string, string>;
 };
 
 
@@ -71,6 +76,8 @@ export class DocumentInstance {
 
   private themes: Theme[] = [];
 
+  private hovers: Hover[] = [];
+
   constructor(
     public readonly document: vscode.TextDocument,
   ) {
@@ -99,6 +106,7 @@ export class DocumentInstance {
 
     // Cleat the state.
     this.diagnostics = [];
+    this.hovers = [];
     Globals.diagnosticCollection.set(this.document.uri, this.diagnostics);
     for (const color of this.singleColorDecorationRangeMap.keys()) {
       // The empty array will remove the decoration of a removed color in the editor.setDecorations below.
@@ -150,6 +158,7 @@ export class DocumentInstance {
         const decorationType = this.decorations.getSingleColor(color);
         if (decorationType !== null) {
           editor.setDecorations(decorationType, ranges);
+
         }
       }
       for (const color of this.multipleColorsDecorationRangeMap.keys()) {
@@ -539,11 +548,22 @@ export class DocumentInstance {
         }
         const colors = this.themes.map((theme) => theme.name).map(theme => value.getValue(theme as string)).join(',');
         const range = new vscode.Range(...this.keyPositionsFromIndex(context.index));
+        // Adds the decoration.
         if (!this.multipleColorsDecorationRangeMap.has(colors)) {
           this.multipleColorsDecorationRangeMap.set(colors, [range]);
         } else {
           this.multipleColorsDecorationRangeMap.get(colors)!.push(range);
         }
+        const hoverColors = new Map<string, string>();
+        for (const theme of this.themes) {
+          const color = value.getValue(theme.name)!;
+          hoverColors.set(theme.name, color as string);
+        }
+        // Adds the hover.
+        this.hovers.push({
+          range,
+          colors: hoverColors,
+        });
       }
     }
   }
@@ -612,5 +632,29 @@ export class DocumentInstance {
         });
       }
     }
+  }
+
+  /**
+   * Provides the hover of the given position.
+   */
+  provideHover(position: vscode.Position): vscode.Hover | null {
+    const hover = this.hovers.find(({ range }) => range.contains(position));
+    if (!hover) { return null; }
+    const content = new vscode.MarkdownString(
+      [
+        '<ul>',
+        ...Array.from(hover.colors.entries()).map(([theme, color]) => {
+          const colors = DecorationsMap.getColorAndColorContrast(color);
+          if (!colors) { return; }
+          return `<li><b>${theme}</b>: <span style="color:${colors?.contrast};background-color:${colors.color};">#${color}</span></li>`;
+        }).filter(Boolean),
+        '</ul>'
+      ].join('\n'),
+    );
+    content.supportHtml = true;
+    content.isTrusted = true;
+    return new vscode.Hover(
+      content,
+    );
   }
 }

@@ -16,6 +16,15 @@ export function activate(context: vscode.ExtensionContext) {
   vscode.window.onDidChangeVisibleTextEditors(onOpenEditor, null, context.subscriptions);
 
   onOpenEditor(vscode.window.visibleTextEditors);
+
+  vscode.languages.registerHoverProvider('yaml', {
+    provideHover(document, position, _) {
+      if (!isValidDocument(document)) { return; }
+      const documentInstance = activeDocumentInstances.find(({ document: instanceDocument }) => instanceDocument === document);
+      if (!documentInstance) { return; }
+      return documentInstance.provideHover(position);
+    }
+  });
 }
 
 export function deactivate() {
