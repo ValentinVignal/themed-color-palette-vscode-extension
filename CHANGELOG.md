@@ -1,6 +1,9 @@
 # Change Log
 
-### [0.1.0] - 2023-07-31
+### [0.2.0] - 2023-09-01
+- Adds an hover on themed colors to lists done the color code the hovered color in each themes.
+
+### [0.1.0] - 2023-08-31
 - Adds support of theme import from another theme.
 
 ### [0.0.8] - 2022-05-06
