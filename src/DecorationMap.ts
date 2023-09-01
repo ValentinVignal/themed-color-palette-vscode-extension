@@ -70,7 +70,12 @@ export class DecorationsMap {
     return decorationTypes;
   }
 
-  private static getColorAndColorContrast(color: Color): { color: Color, contrast: Color } | null {
+  /**
+   * 
+   * @param color The string color representation.
+   * @returns The color and its contrast to use for html.
+   */
+  static getColorAndColorContrast(color: Color): { color: Color, contrast: Color } | null {
     try {
       const red = parseInt(color.substring(2, 4), 16);
       const green = parseInt(color.substring(4, 6), 16);
